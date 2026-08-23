@@ -527,6 +527,8 @@ def _draw_frame(
     codex_cursor: int | None = None,
     lwa_prompt: str | None = None,
     lwa_cursor: int | None = None,
+    codex_prompt_selection: tuple[int, int] | None = None,
+    lwa_prompt_selection: tuple[int, int] | None = None,
     lwa_scroll_offset: int = 0,
     selected_codex_lines: set[int] | None = None,
     selected_lwa_lines: set[int] | None = None,
@@ -613,7 +615,7 @@ def _draw_frame(
     codex_cursor = cursor if codex_cursor is None else codex_cursor
     lwa_cursor = cursor if lwa_cursor is None else lwa_cursor
 
-    def prompt_view(value: str, position: int) -> tuple[list[str], int, int]:
+    def prompt_view(value: str, position: int) -> tuple[list[str], int, int, int]:
         lines = value.split("\n") or [""]
         before = value[:position].split("\n")
         current_line = len(before) - 1
@@ -624,17 +626,49 @@ def _draw_frame(
         visible = lines[visible_start:] if visible_start == -1 else lines[visible_start : visible_start + 2]
         if len(visible) == 1:
             visible.insert(0, "")
-        return visible, len(before[-1]), current_line - visible_start
+        return visible, len(before[-1]), current_line - visible_start, 0 if visible_start == -1 else visible_start
 
-    codex_visible, _codex_column, codex_offset = prompt_view(codex_prompt, codex_cursor)
-    lwa_visible, _lwa_column, lwa_offset = prompt_view(lwa_prompt, lwa_cursor)
-    _pane_line(screen, lwa_prompt_heading, 1, left_width - 1, f"{lwa_marker} LWA PROMPT · draft only", curses.A_BOLD)
-    _pane_line(screen, lwa_prompt_heading + 1, 1, left_width - 1, ("> " if active_surface == "lwa" else "  ") + lwa_visible[0])
-    _pane_line(screen, lwa_prompt_heading + 2, 1, left_width - 1, ("> " if active_surface == "lwa" else "  ") + lwa_visible[1])
+    codex_visible, _codex_column, codex_offset, codex_start_line = prompt_view(codex_prompt, codex_cursor)
+    lwa_visible, _lwa_column, lwa_offset, lwa_start_line = prompt_view(lwa_prompt, lwa_cursor)
+
+    def draw_prompt_lines(row, column, width, prefix, lines, start_line, value, selection):
+        line_starts = []
+        position = 0
+        for line in value.split("\n"):
+            line_starts.append(position)
+            position += len(line) + 1
+        for index, line in enumerate(lines[:2]):
+            _pane_line(screen, row + index, column, width, prefix + line)
+            if selection is None:
+                continue
+            global_start = line_starts[min(start_line + index, len(line_starts) - 1)]
+            overlap_start = max(selection[0], global_start)
+            overlap_end = min(selection[1], global_start + len(line))
+            if overlap_start >= overlap_end:
+                continue
+            highlight_column = column + len(prefix) + overlap_start - global_start
+            highlight = line[overlap_start - global_start : overlap_end - global_start]
+            try:
+                screen.addnstr(row + index, highlight_column, highlight, len(highlight), curses.A_REVERSE)
+            except curses.error:
+                pass
+
+    lwa_title = f"{lwa_marker} LWA PROMPT · draft only"
+    if lwa_prompt_selection:
+        lwa_title += f" · selected {lwa_prompt_selection[1] - lwa_prompt_selection[0]} chars"
+    _pane_line(screen, lwa_prompt_heading, 1, left_width - 1, lwa_title, curses.A_BOLD)
+    draw_prompt_lines(
+        lwa_prompt_heading + 1, 1, left_width - 1,
+        "> " if active_surface == "lwa" else "  ", lwa_visible, lwa_start_line,
+        lwa_prompt, lwa_prompt_selection,
+    )
     if not native_split:
         _pane_line(screen, codex_prompt_heading, right_column + 1, right_width - 1, f"{codex_marker} CODEX PROMPT (direct PTY input)", curses.A_BOLD)
-        _pane_line(screen, codex_prompt_heading + 1, right_column + 1, right_width - 1, ("> " if active_surface == "codex" else "  ") + codex_visible[0])
-        _pane_line(screen, codex_prompt_heading + 2, right_column + 1, right_width - 1, ("> " if active_surface == "codex" else "  ") + codex_visible[1])
+        draw_prompt_lines(
+            codex_prompt_heading + 1, right_column + 1, right_width - 1,
+            "> " if active_surface == "codex" else "  ", codex_visible, codex_start_line,
+            codex_prompt, codex_prompt_selection,
+        )
         for index, suggestion in enumerate((codex_suggestions or [])[:2]):
             _pane_line(screen, codex_prompt_heading + 3 + index, right_column + 1, right_width - 1, suggestion, _semantic_attr(suggestion))
     if lwa_suggestions:
@@ -688,6 +722,8 @@ def _read_key(screen: curses.window):
         "[3~": getattr(curses, "KEY_DC", None),
         "[1;2A": "__LWA_SHIFT_UP__",
         "[1;2B": "__LWA_SHIFT_DOWN__",
+        "[1;2C": "__LWA_SHIFT_RIGHT__",
+        "[1;2D": "__LWA_SHIFT_LEFT__",
         "[Z": "__LWA_SHIFT_TAB__",
         "[13;4u": "__LWA_TRANSFER_RESPONSE__",
         "[13;4~": "__LWA_TRANSFER_RESPONSE__",
@@ -1265,8 +1301,10 @@ async def _interactive(
                 scroll_offset=codex_scroll,
                 codex_prompt=editors["codex"].text,
                 codex_cursor=editors["codex"].cursor,
+                codex_prompt_selection=editors["codex"].selection,
                 lwa_prompt=editors["lwa"].text,
                 lwa_cursor=editors["lwa"].cursor,
+                lwa_prompt_selection=editors["lwa"].selection,
                 lwa_scroll_offset=lwa_scroll,
                 selected_codex_lines=(
                     set(range(min(selection_anchor, selection_focus), max(selection_anchor, selection_focus) + 1))
@@ -1617,8 +1655,17 @@ async def _interactive(
                         session_active = False
                         lwa_lines.append(str(exc))
                 continue
+            if key in {"__LWA_SHIFT_LEFT__", "__LWA_SHIFT_RIGHT__"}:
+                if key == "__LWA_SHIFT_LEFT__":
+                    editor.move_left(select=True)
+                else:
+                    editor.move_right(select=True)
+                continue
             if key == "\x03":
-                if selection_anchor is not None and selection_focus is not None:
+                if editors[active_surface].selected_text():
+                    copied = editors[active_surface].selected_text()
+                    label = f"{active_surface.upper()} prompt selection"
+                elif selection_anchor is not None and selection_focus is not None:
                     start = min(selection_anchor, selection_focus)
                     stop = max(selection_anchor, selection_focus)
                     copied = "\n".join(codex_lines[start : stop + 1]).strip()
