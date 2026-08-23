@@ -1,0 +1,303 @@
+# Lwa MCP model-routing baseline.
+# Model catalogs and prices change. Seed models make the router usable immediately;
+# live discovery supplements them whenever a provider exposes a compatible /models API.
+consent_mode: paid_only       # always | paid_only | never
+prefer_free: true
+allow_user_pays: false
+allow_paid: false
+dashboard_host: 127.0.0.1
+dashboard_port: 8766
+catalog_refresh_minutes: 30
+confirmation_ttl_seconds: 600
+max_parallel_consensus: 3
+
+# Persistent cross-project tool library and repetition detector.
+auto_detect_patterns: true
+pattern_min_occurrences: 3
+pattern_similarity_threshold: 0.68
+auto_create_library_tools: true
+auto_activate_prompt_tools: true
+suggest_library_tools: true
+max_library_suggestions: 5
+allow_reviewed_script_execution: false
+
+providers:
+  gemini:
+    name: gemini
+    adapter: gemini
+    base_url: https://generativelanguage.googleapis.com/v1beta
+    api_key_env: GEMINI_API_KEY
+    api_key_envs: [GEMINI_API_KEY_1, GEMINI_API_KEY_2]
+    billing_api_key_env: GEMINI_BILLING_API_KEY
+    billing_class: free_quota
+    subscription_plan: Gemini Pro
+    subscription_status: unknown
+    catalog_page_limit: 10
+    catalog_model_limit: 500
+  openrouter:
+    name: openrouter
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    billing_class: free_quota
+    quota_path: /auth/key
+    daily_request_cap: 45
+  groq:
+    name: groq
+    base_url: https://api.groq.com/openai/v1
+    api_key_env: GROQ_API_KEY
+    billing_class: free_quota
+    daily_request_cap: 900
+  mistral:
+    name: mistral
+    base_url: https://api.mistral.ai/v1
+    api_key_env: MISTRAL_API_KEY
+    billing_class: free_quota
+    daily_request_cap: 900
+  cloudflare:
+    name: cloudflare
+    base_url: https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1
+    api_key_env: CLOUDFLARE_API_TOKEN
+    account_id_env: CLOUDFLARE_ACCOUNT_ID
+    billing_class: free_quota
+    supports_live_models: false
+    daily_request_cap: 900
+  siliconflow:
+    name: siliconflow
+    enabled: false
+    experimental: true
+    disabled_reason: "Experimental provider disabled by default: last live model discovery returned HTTP 401; verify SILICONFLOW_API_KEY before re-enabling."
+    base_url: https://api.siliconflow.cn/v1
+    api_key_env: SILICONFLOW_API_KEY
+    billing_class: free_quota
+    daily_request_cap: 900
+  venice:
+    name: venice
+    base_url: https://api.venice.ai/api/v1
+    api_key_env: VENICE_API_KEY
+    quota_path: /billing/balance
+    billing_class: paid
+    monthly_usd_cap: 5.00
+  pollinations:
+    name: pollinations
+    base_url: https://gen.pollinations.ai/v1
+    api_key_env: POLLINATIONS_API_KEY
+    billing_class: free_quota
+    daily_request_cap: 900
+  cohere:
+    name: cohere
+    base_url: https://api.cohere.ai/compatibility/v1
+    api_key_env: COHERE_API_KEY
+    billing_class: free_quota
+    daily_request_cap: 900
+  replicate:
+    name: replicate
+    adapter: replicate
+    api_key_env: REPLICATE_API_TOKEN
+    billing_class: paid
+    supports_live_models: false
+    monthly_usd_cap: 5.00
+  stability:
+    name: stability
+    adapter: stability
+    base_url: https://api.stability.ai
+    api_key_env: STABILITY_API_KEY
+    billing_class: paid
+    supports_live_models: false
+    monthly_usd_cap: 5.00
+  nvidia:
+    name: nvidia
+    base_url: https://integrate.api.nvidia.com/v1
+    api_key_env: NVIDIA_API_KEY
+    billing_class: free_quota
+    daily_request_cap: 900
+  zai:
+    name: zai
+    base_url: https://api.z.ai/api/paas/v4
+    api_key_env: ZAI_API_KEY
+    billing_class: free_quota
+    daily_request_cap: 900
+  aion:
+    name: aion
+    base_url: https://api.aionlabs.ai/v1
+    api_key_env: AION_API_KEY
+    billing_class: free_quota
+    daily_request_cap: 900
+  zenmux:
+    name: zenmux
+    base_url: https://zenmux.ai/api/v1
+    api_key_env: ZENMUX_API_KEY
+    quota_path: /management/payg/balance
+    quota_key_env: ZENMUX_MANAGEMENT_API_KEY
+    billing_class: paid
+    monthly_usd_cap: 5.00
+  cerebras:
+    name: cerebras
+    base_url: https://api.cerebras.ai/v1
+    api_key_env: CEREBRAS_API_KEY
+    billing_class: free_quota
+    daily_request_cap: 900
+  blackbox:
+    name: blackbox
+    base_url: https://api.blackbox.ai
+    api_key_env: BLACKBOX_API_KEY
+    chat_path: /chat/completions
+    supports_live_models: false
+    billing_class: paid
+    monthly_usd_cap: 5.00
+  puter:
+    name: puter
+    adapter: puter
+    base_url: https://api.puter.com/puterai/openai/v1
+    api_key_env: PUTER_AUTH_TOKEN
+    billing_class: user_pays
+    daily_request_cap: 900
+
+# Scores are 0-100 task affinity values. Exact model availability is validated at runtime.
+# Unknown live models remain eligible at a neutral score, but these seeds win normal routing.
+models:
+  - provider: openrouter
+    model: openrouter/free
+    display_name: OpenRouter Free Model Router
+    billing_class: free_quota
+    context_length: 100000
+    free_plan_max_tokens: null
+    pro_plan_max_tokens: null
+    capabilities: [text, reasoning]
+    task_scores: {quick_response: 74, query: 76, conversation_compression: 77, token_optimization: 78, document_editing: 72, sitrep: 72, planning: 73, consensus: 70, verification: 70, coding_aux: 72}
+  - provider: groq
+    model: openai/gpt-oss-20b
+    billing_class: free_quota
+    context_length: 131072
+    capabilities: [text, reasoning, tools, structured]
+    task_scores: {quick_response: 92, query: 84, conversation_compression: 89, token_optimization: 90, document_editing: 82, sitrep: 80, planning: 80, consensus: 78, verification: 78, coding_aux: 84}
+  - provider: groq
+    model: openai/gpt-oss-120b
+    billing_class: free_quota
+    context_length: 131072
+    capabilities: [text, reasoning, tools, structured]
+    task_scores: {quick_response: 78, query: 91, conversation_compression: 86, token_optimization: 82, document_editing: 90, sitrep: 91, planning: 92, consensus: 91, verification: 93, coding_aux: 91}
+  - provider: mistral
+    model: mistral-small-latest
+    billing_class: free_quota
+    context_length: 32768
+    capabilities: [text, tools, structured]
+    task_scores: {quick_response: 87, query: 82, conversation_compression: 86, token_optimization: 86, document_editing: 85, sitrep: 82, planning: 82, consensus: 78, verification: 79, coding_aux: 84}
+  - provider: cloudflare
+    model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
+    billing_class: free_quota
+    context_length: 24000
+    capabilities: [text]
+    task_scores: {quick_response: 85, query: 81, conversation_compression: 83, token_optimization: 83, document_editing: 82, sitrep: 81, planning: 81, consensus: 78, verification: 79, coding_aux: 81}
+  - provider: siliconflow
+    model: Qwen/Qwen2-7B-Instruct
+    enabled: false
+    disabled_reason: "Disabled by default because SiliconFlow has only reported a live model-discovery error; experimental provider."
+    billing_class: free_quota
+    context_length: 32768
+    capabilities: [text, reasoning]
+    task_scores: {quick_response: 88, query: 80, conversation_compression: 86, token_optimization: 88, document_editing: 81, sitrep: 78, planning: 78, consensus: 75, verification: 76, coding_aux: 82}
+  - provider: venice
+    model: qwen3-235b-a22b-instruct-2507
+    billing_class: paid
+    context_length: 131072
+    capabilities: [text, reasoning]
+    task_scores: {quick_response: 76, query: 89, conversation_compression: 86, token_optimization: 82, document_editing: 89, sitrep: 90, planning: 91, consensus: 90, verification: 91, coding_aux: 88}
+  - provider: pollinations
+    model: openai
+    billing_class: free_quota
+    context_length: 128000
+    capabilities: [text, reasoning, tools]
+    task_scores: {quick_response: 89, query: 86, conversation_compression: 86, token_optimization: 86, document_editing: 85, sitrep: 84, planning: 84, consensus: 83, verification: 83, coding_aux: 85}
+  - provider: cohere
+    model: command-a-03-2025
+    billing_class: free_quota
+    context_length: 256000
+    capabilities: [text, tools, structured]
+    task_scores: {quick_response: 78, query: 86, conversation_compression: 90, token_optimization: 87, document_editing: 92, sitrep: 91, planning: 88, consensus: 88, verification: 87, coding_aux: 82}
+  - provider: nvidia
+    model: meta/llama-3.3-70b-instruct
+    billing_class: free_quota
+    context_length: 131072
+    capabilities: [text, tools]
+    task_scores: {quick_response: 84, query: 84, conversation_compression: 84, token_optimization: 83, document_editing: 84, sitrep: 84, planning: 85, consensus: 83, verification: 83, coding_aux: 84}
+  - provider: zai
+    model: glm-4.7-flash
+    billing_class: free_quota
+    context_length: 131072
+    capabilities: [text, reasoning, tools]
+    task_scores: {quick_response: 90, query: 84, conversation_compression: 88, token_optimization: 90, document_editing: 83, sitrep: 82, planning: 83, consensus: 80, verification: 81, coding_aux: 85}
+  - provider: aion
+    model: aion-labs/aion-2.0
+    billing_class: free_quota
+    context_length: 32768
+    capabilities: [text, reasoning]
+    task_scores: {quick_response: 86, query: 80, conversation_compression: 85, token_optimization: 86, document_editing: 80, sitrep: 79, planning: 79, consensus: 77, verification: 78, coding_aux: 80}
+  - provider: zenmux
+    model: google/gemini-3.1-pro-preview
+    billing_class: paid
+    context_length: 1000000
+    capabilities: [text, reasoning, tools, structured, vision]
+    task_scores: {quick_response: 76, query: 95, conversation_compression: 91, token_optimization: 87, document_editing: 95, sitrep: 95, planning: 96, consensus: 96, verification: 96, coding_aux: 95}
+  - provider: cerebras
+    model: gpt-oss-120b
+    billing_class: free_quota
+    context_length: 131072
+    capabilities: [text, reasoning, tools]
+    task_scores: {quick_response: 90, query: 91, conversation_compression: 90, token_optimization: 89, document_editing: 91, sitrep: 92, planning: 93, consensus: 92, verification: 94, coding_aux: 92}
+  - provider: blackbox
+    model: blackboxai/openai/gpt-5.5
+    billing_class: paid
+    context_length: 128000
+    capabilities: [text, reasoning, tools]
+    task_scores: {quick_response: 81, query: 88, conversation_compression: 85, token_optimization: 84, document_editing: 89, sitrep: 87, planning: 90, consensus: 88, verification: 89, coding_aux: 94}
+  - provider: replicate
+    model: meta/meta-llama-3-70b-instruct
+    billing_class: paid
+    context_length: 8192
+    capabilities: [text]
+    task_scores: {quick_response: 68, query: 73, conversation_compression: 72, token_optimization: 70, document_editing: 74, sitrep: 74, planning: 75, consensus: 75, verification: 75, coding_aux: 72}
+    metadata:
+      input_mapping: {prompt: '$PROMPT', max_new_tokens: 1200}
+  - provider: replicate
+    model: black-forest-labs/flux-schnell
+    billing_class: paid
+    context_length: 8192
+    capabilities: [image]
+    task_scores: {image_generation: 92}
+    metadata:
+      input_mapping: {prompt: '$PROMPT', aspect_ratio: '1:1', output_format: webp, output_quality: 90}
+  - provider: stability
+    model: stable-image-core
+    billing_class: paid
+    context_length: 8192
+    capabilities: [image]
+    task_scores: {image_generation: 95}
+    metadata: {endpoint: /v2beta/stable-image/generate/core}
+  - provider: puter
+    model: openai/gpt-5.6-sol
+    display_name: GPT-5.6 SOL through Puter
+    billing_class: user_pays
+    context_length: 400000
+    capabilities: [text, reasoning, tools, structured]
+    task_scores: {quick_response: 70, query: 96, conversation_compression: 91, token_optimization: 88, document_editing: 96, sitrep: 96, planning: 97, consensus: 97, verification: 97, coding_aux: 97}
+  - provider: puter
+    model: openai/gpt-5.6-terra
+    display_name: GPT-5.6 Terra through Puter
+    billing_class: user_pays
+    context_length: 400000
+    capabilities: [text, reasoning, tools, structured]
+    task_scores: {quick_response: 69, query: 95, conversation_compression: 90, token_optimization: 87, document_editing: 95, sitrep: 95, planning: 96, consensus: 96, verification: 96, coding_aux: 96}
+  - provider: puter
+    model: openai/gpt-5.6-luna
+    display_name: GPT-5.6 Luna through Puter
+    billing_class: user_pays
+    context_length: 400000
+    capabilities: [text, reasoning, tools, structured]
+    task_scores: {quick_response: 74, query: 94, conversation_compression: 92, token_optimization: 91, document_editing: 94, sitrep: 94, planning: 95, consensus: 95, verification: 95, coding_aux: 95}
+  - provider: puter
+    model: openai/gpt-5.3-codex
+    display_name: GPT-5.3 Codex through Puter
+    billing_class: user_pays
+    context_length: 400000
+    capabilities: [text, reasoning, tools, structured]
+    task_scores: {quick_response: 68, query: 91, conversation_compression: 88, token_optimization: 90, document_editing: 93, sitrep: 90, planning: 95, consensus: 92, verification: 95, coding_aux: 100}

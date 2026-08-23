@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b1020" />
+    <title>Agouti Simulator · Cat Life</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">AGOUTI SIMULATOR / 01</p>
+          <h1>Cat Life <span aria-hidden="true">🐈</span></h1>
+          <p class="lede">A tiny isometric universe where every cat follows the simple rules of Conway’s Game of Life.</p>
+        </div>
+        <div class="generation-card" aria-label="Simulation status">
+          <span class="label">GENERATION</span>
+          <strong id="generation">0</strong>
+          <span id="live-count">0 cats alive</span>
+        </div>
+      </header>
+
+      <section class="workspace" aria-label="Game of Life simulator">
+        <div class="board-wrap">
+          <canvas id="life-board" role="grid" tabindex="0" aria-label="Isometric cat life board" aria-rowcount="16" aria-colcount="24"></canvas>
+          <div class="board-hint">Click a tile to place a cat · Arrow keys move · Space toggles</div>
+        </div>
+
+        <aside class="controls" aria-label="Simulation controls">
+          <div class="control-group primary-actions">
+            <button id="play" class="button button-primary" type="button" aria-pressed="false"><span aria-hidden="true">▶</span> Start life</button>
+            <button id="step" class="button" type="button"><span aria-hidden="true">⏭</span> Step</button>
+          </div>
+
+          <div class="control-group">
+            <div class="control-heading"><label for="speed">Tempo</label><output id="speed-value" for="speed">6 gen / sec</output></div>
+            <input id="speed" type="range" min="1" max="12" value="6" />
+          </div>
+
+          <div class="control-group">
+            <span class="control-title">World edge</span>
+            <label class="switch-row"><input id="wrap" type="checkbox" checked /><span class="switch" aria-hidden="true"></span><span>Wrap around edges</span></label>
+          </div>
+
+          <div class="control-group action-grid">
+            <button id="randomize" class="button" type="button">Randomize</button>
+            <button id="clear" class="button" type="button">Clear board</button>
+          </div>
+
+          <div class="control-group patterns">
+            <div class="control-heading"><span class="control-title">Quick patterns</span><span class="pattern-note">classic forms</span></div>
+            <button class="pattern-button" type="button" data-pattern="glider">Glider <span>↗</span></button>
+            <button class="pattern-button" type="button" data-pattern="pulsar">Pulsar <span>✦</span></button>
+            <button class="pattern-button" type="button" data-pattern="cats">Cat cluster <span>🐈</span></button>
+          </div>
+
+          <p id="status" class="status" role="status" aria-live="polite">Ready to explore. Place a few cats or choose a pattern.</p>
+        </aside>
+      </section>
+
+      <footer class="rules">
+        <div><span class="rule-number">01</span><p><strong>Survival</strong> A cat with 2 or 3 neighbors stays cozy.</p></div>
+        <div><span class="rule-number">02</span><p><strong>Birth</strong> An empty tile with exactly 3 neighbors gets a new cat.</p></div>
+        <div><span class="rule-number">03</span><p><strong>Loneliness</strong> Too few or too many neighbors means an empty tile next turn.</p></div>
+      </footer>
+    </main>
+    <script src="app.js" defer></script>
+  </body>
+</html>

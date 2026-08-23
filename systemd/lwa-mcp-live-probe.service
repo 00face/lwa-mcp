@@ -1,0 +1,17 @@
+[Unit]
+Description=Lwa MCP explicit zero-payload provider probe
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Documents/Documents/code/lwa-mcp
+EnvironmentFile=-%h/.config/lwa-mcp/live-check.env
+ExecStart=%h/Documents/Documents/code/lwa-mcp/scripts/lwa-maintenance.sh live-probe
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/state/lwa-mcp %h/.local/share/lwa-mcp %h/.config/lwa-mcp
+StandardOutput=journal
+StandardError=journal

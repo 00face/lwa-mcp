@@ -1,0 +1,6 @@
+[console_scripts]
+lwa = lwa_mcp.launch:main
+lwa-dashboard = lwa_mcp.dashboard:main
+lwa-mcp = lwa_mcp.server:main
+lwa-router = lwa_mcp.cli:main
+lwa-web = lwa_mcp.launch:web_main

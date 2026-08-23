@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic explicit Lwa MCP provider probe
+
+[Timer]
+OnCalendar=*:0/30
+Persistent=true
+RandomizedDelaySec=120
+Unit=lwa-mcp-live-probe.service
+
+[Install]
+WantedBy=timers.target

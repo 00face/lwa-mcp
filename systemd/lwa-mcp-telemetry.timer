@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic Lwa MCP local telemetry summary
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=300
+Unit=lwa-mcp-telemetry.service
+
+[Install]
+WantedBy=timers.target

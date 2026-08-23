@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0d1018" />
+  <title>Polymino Control Workflow Note</title>
+  <link rel="stylesheet" href="/static/polymino-control.css" />
+</head>
+<body>
+  <main class="shell workflow-shell">
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">LWA MCP / LWA PLUGIN TEST WORKFLOW</p>
+        <h1>Polymino control note</h1>
+        <p class="lede">
+          Use the polymino control as a repeatable surface for validating launch, keyboard
+          input, state persistence, and plugin-driven automation against the same seed and
+          score history.
+        </p>
+      </div>
+      <div class="status-card">
+        <span class="label">SCOPE</span>
+        <strong>Local test only</strong>
+        <span>Static browser surface; no provider completion.</span>
+      </div>
+    </header>
+
+    <section class="panel workflow-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">WORKFLOW</p>
+          <h2>Recommended operator flow</h2>
+        </div>
+      </div>
+      <ol class="workflow-list">
+        <li>Open <a href="/static/polymino-control.html">the polymino control</a>.</li>
+        <li>Use <code>?seed=12345</code> for a deterministic launch; a query seed takes precedence over local storage.</li>
+        <li>Confirm the persisted seed and score summary in the sidebar.</li>
+        <li>Use Export snapshot to capture an exact board fixture, then Import snapshot to restore it.</li>
+        <li>Use the action log to confirm visible <code>mcp:</code> and <code>plugin:</code> control events.</li>
+        <li>Validate keyboard control, hold, rotation, hard drop, and game-over recovery.</li>
+        <li>Capture the local seed, score, and snapshot JSON after each run.</li>
+      </ol>
+    </section>
+
+    <section class="panel workflow-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">LWA TESTS</p>
+          <h2>What to verify</h2>
+        </div>
+      </div>
+      <ul class="workflow-list compact">
+        <li>The dashboard link opens the control page.</li>
+        <li>The control preserves seed, score, and display toggles across reloads.</li>
+        <li>The same seed produces the same initial current and next queue state.</li>
+        <li>Snapshot JSON restores board, queue, hold, score, level, RNG position, and action trace.</li>
+        <li>Export/import failures are announced in the status region and logged as MCP actions.</li>
+        <li>The bag only uses the curated monomino through tridecomino families.</li>
+        <li>The board remains keyboard reachable and readable at mobile and desktop widths.</li>
+        <li>Resetting with the same seed reproduces the same initial bag order.</li>
+      </ul>
+    </section>
+
+    <section class="panel workflow-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">SCENARIO MATRIX</p>
+          <h2>Repeatable CI-style cases</h2>
+        </div>
+      </div>
+      <ul class="workflow-list compact">
+        <li><code>?seed=1</code>: smallest positive seed and fresh local storage.</li>
+        <li><code>?seed=12345</code>: standard deterministic keyboard and snapshot run.</li>
+        <li><code>?seed=4294967295</code>: unsigned 32-bit boundary seed.</li>
+        <li>Reload after a hard drop: score, seed, toggles, and action log persist.</li>
+        <li>Import a saved fixture, rotate, hold, hard drop, and export again.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0d1018" />
+  <title>Polymino Control · Lwa MCP</title>
+  <link rel="stylesheet" href="/static/polymino-control.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">LWA MCP TEST CONTROL / POLYMINO STACK</p>
+        <h1>Gold, silver, platinum falling blocks.</h1>
+        <p class="lede">
+          A Tetris-like control surface for exercising LWA-MCP and the LWA Plugin with
+          monomino through tridecomino pieces, soft neumorphism, and a high-contrast
+          accessible control layout.
+        </p>
+      </div>
+
+      <div class="status-card" aria-label="Session status">
+        <span class="label">SESSION</span>
+        <strong id="sessionState">Ready</strong>
+        <span id="seedLabel">Seed: --</span>
+      </div>
+    </header>
+
+    <section class="workspace" aria-label="Polymino game">
+      <div class="board-frame">
+        <canvas id="board" tabindex="0" role="grid" aria-label="Polymino board" aria-rowcount="22" aria-colcount="10"></canvas>
+        <div class="board-hint">Keyboard: arrows move, Z/X rotate, Space hard drops, Shift holds, P pauses, R resets.</div>
+      </div>
+
+      <aside class="sidebar" aria-label="Game controls">
+        <section class="panel stats">
+          <div><span>Score</span><strong id="score">0</strong></div>
+          <div><span>Lines</span><strong id="lines">0</strong></div>
+          <div><span>Level</span><strong id="level">1</strong></div>
+          <div><span>Drop</span><strong id="dropRate">1.0s</strong></div>
+        </section>
+
+        <section class="panel next-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">PIECE PREVIEW</p>
+              <h2>Current, next, and hold</h2>
+            </div>
+          </div>
+          <div class="preview-grid">
+            <article>
+              <span class="preview-label">Current</span>
+              <canvas id="currentPreview" width="160" height="160" aria-label="Current piece preview"></canvas>
+            </article>
+            <article>
+              <span class="preview-label">Next</span>
+              <canvas id="nextPreview" width="160" height="160" aria-label="Next piece preview"></canvas>
+            </article>
+            <article>
+              <span class="preview-label">Hold</span>
+              <canvas id="holdPreview" width="160" height="160" aria-label="Held piece preview"></canvas>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel button-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">CONTROL SURFACE</p>
+              <h2>Primary actions</h2>
+            </div>
+          </div>
+          <div class="button-grid">
+            <button id="toggle" type="button" class="button button-primary" aria-pressed="false">Start</button>
+            <button id="step" type="button" class="button">Step</button>
+            <button id="hold" type="button" class="button">Hold</button>
+            <button id="drop" type="button" class="button">Hard drop</button>
+            <button id="rotateLeft" type="button" class="button">Rotate left</button>
+            <button id="rotateRight" type="button" class="button">Rotate right</button>
+            <button id="reset" type="button" class="button button-soft">Reset</button>
+            <button id="shuffle" type="button" class="button button-soft">Reseed bag</button>
+          </div>
+        </section>
+
+        <section class="panel tuning-panel">
+          <div class="control-row seed-row">
+            <div>
+              <label for="seedInput">Run seed</label>
+              <small id="seedHint">Use ?seed=12345 for deterministic launch.</small>
+            </div>
+            <div class="seed-controls">
+              <input id="seedInput" type="number" min="0" max="4294967295" inputmode="numeric" aria-label="Run seed" />
+              <button id="applySeed" type="button" class="button button-small">Apply</button>
+            </div>
+          </div>
+          <div class="control-row">
+            <div>
+              <label for="speed">Tempo</label>
+              <small id="speedLabel">1.0 seconds per drop</small>
+            </div>
+            <input id="speed" type="range" min="120" max="1200" step="10" value="850" />
+          </div>
+          <div class="control-row">
+            <div>
+              <label for="ghost">Ghost piece</label>
+              <small>Visual landing guide</small>
+            </div>
+            <input id="ghost" type="checkbox" checked />
+          </div>
+          <div class="control-row">
+            <div>
+              <label for="showGrid">Grid</label>
+              <small>Subtle board guide lines</small>
+            </div>
+            <input id="showGrid" type="checkbox" checked />
+          </div>
+        </section>
+
+        <section class="panel persistence-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">PERSISTENCE</p>
+              <h2>Repeatable test runs</h2>
+            </div>
+          </div>
+          <div class="persist-grid">
+            <div><span>Last seed</span><strong id="persistSeed">—</strong></div>
+            <div><span>Best score</span><strong id="persistBestScore">—</strong></div>
+            <div><span>Last score</span><strong id="persistLastScore">—</strong></div>
+            <div><span>Saved runs</span><strong id="persistRunCount">0</strong></div>
+          </div>
+          <p id="persistSummary" class="persist-summary">
+            The current seed, score, level, and control flags are stored locally for repeatable runs.
+          </p>
+          <div class="snapshot-actions">
+            <button id="exportSnapshot" type="button" class="button button-small">Export snapshot</button>
+            <button id="importSnapshot" type="button" class="button button-small">Import snapshot</button>
+            <input id="snapshotFile" type="file" accept="application/json,.json" hidden />
+          </div>
+          <a class="workflow-link" href="/static/polymino-control-workflow.html">Open workflow note</a>
+        </section>
+
+        <section class="panel log-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">LWA ACTION LOG</p>
+              <h2>MCP and plugin trace</h2>
+            </div>
+            <button id="clearLog" type="button" class="button button-small">Clear</button>
+          </div>
+          <ol id="actionLog" class="action-log" aria-live="polite" aria-label="LWA action log"></ol>
+        </section>
+
+        <section class="panel catalog-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">POLYMINO CATALOG</p>
+              <h2>1 to 13 cells</h2>
+            </div>
+          </div>
+          <div class="catalog" aria-label="Polymino catalog">
+            <div>01 <strong>Monomino</strong></div>
+            <div>02 <strong>Domino</strong></div>
+            <div>03 <strong>I Triomino</strong></div>
+            <div>04 <strong>T Tetromino</strong></div>
+            <div>05 <strong>P Pentomino</strong></div>
+            <div>06 <strong>L Hexomino</strong></div>
+            <div>07 <strong>F Heptomino</strong></div>
+            <div>08 <strong>U Octomino</strong></div>
+            <div>09 <strong>X Nonomino</strong></div>
+            <div>10 <strong>W Decomino</strong></div>
+            <div>11 <strong>Y Undecomino</strong></div>
+            <div>12 <strong>Z Duodecomino</strong></div>
+            <div>13 <strong>V Tridecomino</strong></div>
+          </div>
+        </section>
+
+        <section class="panel help-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">HELP</p>
+              <h2>Controls and purpose</h2>
+            </div>
+          </div>
+          <p id="status" class="status" role="status" aria-live="polite">
+            Ready. Start a session to exercise LWA-MCP/plugin interactions.
+          </p>
+          <a class="workflow-link inline" href="/static/polymino-control-workflow.html">Workflow note</a>
+        </section>
+      </aside>
+    </section>
+  </main>
+  <script src="/static/polymino-control.js" defer></script>
+</body>
+</html>
