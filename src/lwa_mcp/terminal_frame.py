@@ -1561,12 +1561,13 @@ async def _interactive(
                                 f"mouse_event action=release button=release x={mouse_x} y={mouse_y}"
                             )
                         if buttons & (left_pressed | left_moved) and in_lwa_feed:
-                            if lwa_selection_anchor is None:
+                            if buttons & left_pressed:
                                 lwa_selection_anchor = lwa_point
+                                lwa_selection_focus = lwa_point
                                 _focus_trace("selection surface=lwa phase=anchor length=0")
-                            elif buttons & left_moved:
+                            elif buttons & left_moved and lwa_selection_anchor is not None:
                                 _focus_trace("selection surface=lwa phase=dragging length=unknown")
-                            lwa_selection_focus = lwa_point
+                                lwa_selection_focus = lwa_point
                             continue
                         if buttons & left_pressed and not in_lwa_feed:
                             _focus_trace(
