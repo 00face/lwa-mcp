@@ -33,6 +33,7 @@ def test_native_frame_draws_wireframe_regions_and_borders():
     assert "CODEX PROMPT" in rendered
     assert "LWA FEED" in rendered
     assert "LWA PROMPT" in rendered
+    assert "draft only" in rendered
     assert "Codex output" in rendered
 
     screen.rows.clear()
@@ -107,6 +108,29 @@ def test_native_tab_and_backtab_insert_five_spaces_without_focus_switch():
     assert terminal_frame._insert_native_tab(editor, getattr(terminal_frame.curses, "KEY_BTAB", -999), native_split=True) is True
     assert editor.text == "               "
     assert terminal_frame._insert_native_tab(editor, 9, native_split=False) is False
+
+
+def test_cursor_position_is_pane_local_and_bounded():
+    from lwa_mcp import terminal_frame
+
+    assert terminal_frame._cursor_position(
+        active_surface="lwa",
+        cursor_column=999,
+        prompt_row=999,
+        rows=24,
+        columns=80,
+        left_width=30,
+        native_split=True,
+    ) == (23, 28)
+    assert terminal_frame._cursor_position(
+        active_surface="codex",
+        cursor_column=10,
+        prompt_row=10,
+        rows=24,
+        columns=80,
+        left_width=30,
+        native_split=True,
+    ) is None
 
 
 @pytest.mark.parametrize(

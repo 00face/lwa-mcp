@@ -35,6 +35,7 @@ from .pet_renderer import (
 )
 from .prompt_editor import PromptEditor
 from .prompt_finalizer import finalize_prompt
+from .resource_budget import BoundedLines, budget_float, budget_int, redraw_due
 from .terminal_protocol import (
     TerminalTextBuffer,
     detect_terminal_capabilities,
@@ -477,6 +478,27 @@ def _insert_native_tab(editor: PromptEditor, key: object, *, native_split: bool)
     return False
 
 
+def _cursor_position(
+    *,
+    active_surface: str,
+    cursor_column: int,
+    prompt_row: int,
+    rows: int,
+    columns: int,
+    left_width: int,
+    native_split: bool,
+) -> tuple[int, int] | None:
+    """Return a bounded cursor location for the locally-owned surface."""
+    if native_split and active_surface == "codex":
+        # Codex owns the real cursor in its native tmux pane.
+        return None
+    pane_start = 3 if active_surface == "lwa" else left_width + 3
+    pane_end = left_width - 2 if active_surface == "lwa" else columns - 2
+    row = max(0, min(rows - 1, prompt_row))
+    column = max(pane_start, min(pane_end, pane_start + max(0, cursor_column)))
+    return row, column
+
+
 def _draw_frame(
     screen: curses.window,
     *,
@@ -523,7 +545,7 @@ def _draw_frame(
             screen.addch(row, left_width, "│")
         except (AttributeError, curses.error):
             pass
-    _pane_line(screen, 2, 1, left_width - 1, "LWA FEED", curses.A_BOLD)
+    _pane_line(screen, 2, 1, left_width - 1, "LWA FEED · responses/status", curses.A_BOLD)
     if not native_split:
         _pane_line(screen, 2, right_column + 1, right_width - 1, "CODEX FEED", curses.A_BOLD)
     end = max(0, len(codex_lines) - max(0, scroll_offset))
@@ -544,6 +566,8 @@ def _draw_frame(
         if selected_lwa_lines and source_number in selected_lwa_lines:
             attr |= curses.A_REVERSE
         _pane_line(screen, feed_start + index, 1, left_width - 1, display_text, attr)
+    separator_row = max(feed_start, lwa_prompt_heading - 4)
+    _pane_line(screen, separator_row, 1, left_width - 1, "─" * max(1, left_width - 2), curses.A_DIM)
     if pet_lines:
         pet_top = max(feed_start, lwa_prompt_heading - min(4, len(pet_lines)) - 1)
         for index, line in enumerate(pet_lines[-4:]):
@@ -590,7 +614,7 @@ def _draw_frame(
 
     codex_visible, _codex_column, codex_offset = prompt_view(codex_prompt, codex_cursor)
     lwa_visible, _lwa_column, lwa_offset = prompt_view(lwa_prompt, lwa_cursor)
-    _pane_line(screen, lwa_prompt_heading, 1, left_width - 1, f"{lwa_marker} LWA PROMPT", curses.A_BOLD)
+    _pane_line(screen, lwa_prompt_heading, 1, left_width - 1, f"{lwa_marker} LWA PROMPT · draft only", curses.A_BOLD)
     _pane_line(screen, lwa_prompt_heading + 1, 1, left_width - 1, ("> " if active_surface == "lwa" else "  ") + lwa_visible[0])
     _pane_line(screen, lwa_prompt_heading + 2, 1, left_width - 1, ("> " if active_surface == "lwa" else "  ") + lwa_visible[1])
     if not native_split:
@@ -809,12 +833,12 @@ async def _interactive(
     codex_lines = []
     codex_buffer = TerminalTextBuffer()
     # Small, non-sensitive boot screen for the LWA side in every renderer.
-    lwa_lines = [
+    lwa_lines = BoundedLines([
         "LWA bootscreen · controller ready.",
         r" /\_/\\",
         "( o.o )",
         " > ^ <",
-    ]
+    ], max_lines=budget_int("LWA_MAX_FEED_LINES", 240, minimum=80, maximum=2000))
     editors = {"codex": PromptEditor(), "lwa": PromptEditor()}
     active_surface = "lwa"
     focus_broker = FocusBroker(
@@ -852,6 +876,11 @@ async def _interactive(
     codex_suggestions: list[str] = []
     lwa_suggestions: list[str] = []
     lwa_scroll = 0
+    last_render_signature: object = None
+    last_render_at = 0.0
+    redraw_interval = budget_float(
+        "LWA_REDRAW_INTERVAL", 0.04, minimum=0.02, maximum=0.25
+    )
 
     def focus_effect(target: Surface) -> bool:
         """Apply the broker's decision to the terminal-specific adapter."""
@@ -1180,6 +1209,36 @@ async def _interactive(
                     lwa_lines.append(str(exc))
                 last_geometry = geometry
 
+            render_signature = (
+                rows,
+                columns,
+                active_surface,
+                editors["lwa"].text,
+                editors["lwa"].cursor,
+                editors["codex"].text,
+                editors["codex"].cursor,
+                len(codex_lines),
+                codex_lines[-1] if codex_lines else "",
+                len(lwa_lines),
+                lwa_lines[-1] if lwa_lines else "",
+                codex_scroll,
+                lwa_scroll,
+                pipeline_busy,
+                native_pet_index,
+                native_pet_track_name,
+                native_pet_generation,
+            )
+            if not redraw_due(
+                last_render_signature,
+                render_signature,
+                last_render_at,
+                minimum_interval=redraw_interval,
+            ):
+                await asyncio.sleep(0.02)
+                continue
+            last_render_signature = render_signature
+            last_render_at = time.monotonic()
+
             screen.erase()
             prompt_row, frame_columns = _draw_frame(
                 screen,
@@ -1220,11 +1279,20 @@ async def _interactive(
                 ),
             )
             try:
-                editor = editors[active_surface]
                 left_width = max(28, min(frame_columns // 3, 48))
-                pane_column = 3 if active_surface == "lwa" else left_width + 3
+                editor = editors[active_surface]
                 cursor_column = len(editor.text[: editor.cursor].split("\n")[-1])
-                screen.move(prompt_row, max(0, min(frame_columns - 2, pane_column + cursor_column)))
+                cursor_position = _cursor_position(
+                    active_surface=active_surface,
+                    cursor_column=cursor_column,
+                    prompt_row=prompt_row,
+                    rows=rows,
+                    columns=frame_columns,
+                    left_width=left_width,
+                    native_split=bool(native_tmux_pane),
+                )
+                if cursor_position is not None:
+                    screen.move(*cursor_position)
             except curses.error:
                 pass
             screen.refresh()

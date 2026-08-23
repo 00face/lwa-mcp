@@ -47,7 +47,6 @@ from .syntax import (
 from .terminal_ui import get_codex_identity, render_execution_telemetry, response_display
 from .tool_library import ToolLibrary
 
-
 # Consensus is a fan-out operation, so an unbounded draft or review transcript
 # can exceed the smallest eligible provider's context window. These limits are
 # deliberately conservative and tokenizer-independent.
