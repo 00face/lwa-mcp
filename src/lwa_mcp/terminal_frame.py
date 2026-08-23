@@ -147,6 +147,54 @@ def _focus_trace(event: str) -> None:
         return
 
 
+def _diagnostic_key_class(key: object) -> tuple[str, str | None]:
+    """Classify input without retaining printable input or escape payloads."""
+    if isinstance(key, tuple) and key and key[0] == "__LWA_MOUSE__":
+        return "mouse_tuple", "mouse"
+    if isinstance(key, tuple) and key and key[0] == "__LWA_PASTE__":
+        return "paste_tuple", "paste"
+    if isinstance(key, int):
+        if key == 9:
+            return "curses_code", "tab"
+        if key in {10, 13}:
+            return "curses_code", "enter"
+        if key == 3:
+            return "curses_code", "copy"
+        if key == 17:
+            return "curses_code", "quit"
+        return "curses_code", None
+    if not isinstance(key, str):
+        return type(key).__name__, None
+    normalized = {
+        "__LWA_SHIFT_LEFT__": "shift-left",
+        "__LWA_SHIFT_RIGHT__": "shift-right",
+        "__LWA_SHIFT_UP__": "shift-up",
+        "__LWA_SHIFT_DOWN__": "shift-down",
+        "__LWA_SHIFT_TAB__": "shift-tab",
+        "__LWA_ALT_ENTER__": "alt-enter",
+        "\t": "tab",
+        "\r": "enter",
+        "\n": "newline",
+        "\x03": "copy",
+        "\x11": "quit",
+        "\x1b": "escape",
+    }.get(key)
+    if normalized:
+        return "control_sequence", normalized
+    if len(key) == 1 and key.isprintable():
+        return "text", None
+    return "string", None
+
+
+def _diagnostic_mouse_button(button: int) -> str:
+    """Return a stable mouse class, excluding terminal-specific coordinates."""
+    if button & 64:
+        return "wheel"
+    if button & 32:
+        return "motion"
+    return {0: "left", 1: "middle", 2: "right", 3: "release"}.get(button & 3, "other")
+
+
  
 CODEX_SLASH_FOLLOWUPS = {
     "/pets": "optional pet name or action",
@@ -857,8 +905,9 @@ async def _interactive(
     screen.keypad(True)
     screen.nodelay(True)
     try:
-        curses.mousemask(curses.ALL_MOUSE_EVENTS)
+        mouse_mask = curses.mousemask(curses.ALL_MOUSE_EVENTS)
         curses.mouseinterval(0)
+        _focus_trace(f"mouse_config curses_mask={int(mouse_mask[0]) if mouse_mask else 0} tmux={bool(native_tmux_pane)}")
     except curses.error:
         pass
     try:
@@ -928,6 +977,7 @@ async def _interactive(
     lwa_scroll = 0
     last_render_signature: object = None
     last_render_at = 0.0
+    last_cursor_trace: tuple[str, int, int, bool] | None = None
     redraw_interval = budget_float(
         "LWA_REDRAW_INTERVAL", 0.04, minimum=0.02, maximum=0.25
     )
@@ -1345,6 +1395,14 @@ async def _interactive(
                 )
                 if cursor_position is not None:
                     screen.move(*cursor_position)
+                    cursor_owner = "codex" if native_tmux_pane and active_surface == "codex" else "lwa"
+                    cursor_trace = (cursor_owner, cursor_position[0], cursor_position[1], True)
+                    if cursor_trace != last_cursor_trace:
+                        _focus_trace(
+                            f"cursor owner={cursor_owner} row={cursor_position[0]} "
+                            f"column={cursor_position[1]} visible=true"
+                        )
+                        last_cursor_trace = cursor_trace
             except curses.error:
                 pass
             screen.refresh()
@@ -1420,6 +1478,12 @@ async def _interactive(
             if key is None:
                 await asyncio.sleep(0.02)
                 continue
+            raw_class, normalized = _diagnostic_key_class(key)
+            if raw_class != "text":
+                _focus_trace(
+                    f"key raw_class={raw_class}"
+                    + (f" normalized={normalized}" if normalized else "")
+                )
             editor = editors[active_surface]
             if isinstance(key, int):
                 if key == 17:  # Ctrl+Q: exit the combined LWA/Codex surface.
@@ -1477,15 +1541,33 @@ async def _interactive(
                         left_pressed = getattr(curses, "BUTTON1_PRESSED", 0)
                         left_moved = getattr(curses, "BUTTON1_MOVED", 0)
                         left_released = getattr(curses, "BUTTON1_RELEASED", 0)
+                        if buttons & left_pressed:
+                            _focus_trace(
+                                f"mouse_event action=press button=left x={mouse_x} y={mouse_y}"
+                            )
+                        elif buttons & left_moved:
+                            _focus_trace(
+                                f"mouse_event action=motion button=left x={mouse_x} y={mouse_y}"
+                            )
+                        elif buttons & left_released:
+                            _focus_trace(
+                                f"mouse_event action=release button=release x={mouse_x} y={mouse_y}"
+                            )
                         if buttons & (left_pressed | left_moved) and in_lwa_feed:
                             if lwa_selection_anchor is None:
                                 lwa_selection_anchor = lwa_point
+                                _focus_trace("selection surface=lwa phase=anchor length=0")
+                            elif buttons & left_moved:
+                                _focus_trace("selection surface=lwa phase=dragging length=unknown")
                             lwa_selection_focus = lwa_point
                             continue
                         if buttons & left_released and lwa_selection_anchor is not None:
                             if lwa_point is not None:
                                 lwa_selection_focus = lwa_point
                             selected, start, stop = lwa_selected_text(lwa_selection_anchor, lwa_selection_focus)
+                            _focus_trace(
+                                f"selection surface=lwa phase=selected length={len(selected)}"
+                            )
                             if clipboard_task is None or clipboard_task.done():
                                 clipboard_task = asyncio.create_task(
                                     copy_selection(selected, start, stop, "LWA")
@@ -1588,14 +1670,25 @@ async def _interactive(
                         lwa_point = lwa_selection_point(mouse_x, mouse_y, rows)
                         if lwa_point is not None:
                             drag_action = _sgr_left_drag(mouse_button, mouse_action)
+                            if drag_action in {"press", "motion", "release"}:
+                                _focus_trace(
+                                    f"mouse_event action={drag_action} "
+                                    f"button={_diagnostic_mouse_button(mouse_button)} "
+                                    f"x={mouse_x} y={mouse_y}"
+                                )
                             if drag_action == "press":
                                 lwa_selection_anchor = lwa_point
                                 lwa_selection_focus = lwa_point
+                                _focus_trace("selection surface=lwa phase=anchor length=0")
                             elif drag_action == "motion" and lwa_selection_anchor is not None:
                                 lwa_selection_focus = lwa_point
+                                _focus_trace("selection surface=lwa phase=dragging length=unknown")
                             elif drag_action == "release" and lwa_selection_anchor is not None:
                                 lwa_selection_focus = lwa_point
                                 selected, start, stop = lwa_selected_text(lwa_selection_anchor, lwa_selection_focus)
+                                _focus_trace(
+                                    f"selection surface=lwa phase=selected length={len(selected)}"
+                                )
                                 if clipboard_task is None or clipboard_task.done():
                                     clipboard_task = asyncio.create_task(
                                         copy_selection(selected, start, stop, "LWA")

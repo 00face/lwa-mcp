@@ -97,6 +97,27 @@ def test_native_frame_returns_tab_from_escape_sequence_reader():
     assert terminal_frame._read_key(Screen()) == "\t"
 
 
+def test_diagnostic_key_class_never_classifies_text_as_payload():
+    from lwa_mcp import terminal_frame
+
+    assert terminal_frame._diagnostic_key_class("secret prompt") == ("string", None)
+    assert terminal_frame._diagnostic_key_class("x") == ("text", None)
+    assert terminal_frame._diagnostic_key_class("__LWA_SHIFT_LEFT__") == (
+        "control_sequence",
+        "shift-left",
+    )
+    assert terminal_frame._diagnostic_key_class(9) == ("curses_code", "tab")
+
+
+def test_diagnostic_mouse_button_collapses_terminal_specific_codes():
+    from lwa_mcp import terminal_frame
+
+    assert terminal_frame._diagnostic_mouse_button(64) == "wheel"
+    assert terminal_frame._diagnostic_mouse_button(32) == "motion"
+    assert terminal_frame._diagnostic_mouse_button(0) == "left"
+    assert terminal_frame._diagnostic_mouse_button(3) == "release"
+
+
 def test_native_tab_and_backtab_insert_five_spaces_without_focus_switch():
     from lwa_mcp import terminal_frame
     from lwa_mcp.prompt_editor import PromptEditor
