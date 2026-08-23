@@ -195,6 +195,11 @@ def _diagnostic_mouse_button(button: int) -> str:
     return {0: "left", 1: "middle", 2: "right", 3: "release"}.get(button & 3, "other")
 
 
+def _native_mouse_mask() -> int:
+    """Request button events and drag positions where curses supports them."""
+    return curses.ALL_MOUSE_EVENTS | getattr(curses, "REPORT_MOUSE_POSITION", 0)
+
+
  
 CODEX_SLASH_FOLLOWUPS = {
     "/pets": "optional pet name or action",
@@ -905,7 +910,7 @@ async def _interactive(
     screen.keypad(True)
     screen.nodelay(True)
     try:
-        mouse_mask = curses.mousemask(curses.ALL_MOUSE_EVENTS)
+        mouse_mask = curses.mousemask(_native_mouse_mask())
         curses.mouseinterval(0)
         _focus_trace(f"mouse_config curses_mask={int(mouse_mask[0]) if mouse_mask else 0} tmux={bool(native_tmux_pane)}")
     except curses.error:
@@ -1102,8 +1107,10 @@ async def _interactive(
         return "\n".join(parts), start[0], stop[0]
 
     def lwa_selection_point(mouse_x: int, mouse_y: int, rows: int) -> tuple[int, int] | None:
-        feed_start = 3
-        feed_height = max(1, max(feed_start, rows - 10) - feed_start)
+        geometry = PanelGeometry.from_screen(rows, columns, native_split=bool(native_tmux_pane))
+        feed_start = geometry.feed_start
+        feed_bottom = max(feed_start, geometry.codex_prompt_heading - 1)
+        feed_height = max(1, feed_bottom - feed_start)
         display = _wrapped_lwa_lines(lwa_lines, max(1, columns - 4))
         feed_end = max(0, len(display) - lwa_scroll)
         first = max(0, feed_end - feed_height)
@@ -1561,6 +1568,11 @@ async def _interactive(
                                 _focus_trace("selection surface=lwa phase=dragging length=unknown")
                             lwa_selection_focus = lwa_point
                             continue
+                        if buttons & left_pressed and not in_lwa_feed:
+                            _focus_trace(
+                                f"selection surface=lwa phase=ignored reason=outside-feed "
+                                f"x={mouse_x} y={mouse_y}"
+                            )
                         if buttons & left_released and lwa_selection_anchor is not None:
                             if lwa_point is not None:
                                 lwa_selection_focus = lwa_point
@@ -1693,6 +1705,11 @@ async def _interactive(
                                     clipboard_task = asyncio.create_task(
                                         copy_selection(selected, start, stop, "LWA")
                                     )
+                        elif _sgr_left_drag(mouse_button, mouse_action) == "press":
+                            _focus_trace(
+                                f"selection surface=lwa phase=ignored reason=no-visible-line "
+                                f"x={mouse_x} y={mouse_y}"
+                            )
                     elif mouse_y >= rows - 6:
                         focus_to(Surface.LWA, "mouse")
                     continue

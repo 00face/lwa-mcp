@@ -118,6 +118,15 @@ def test_diagnostic_mouse_button_collapses_terminal_specific_codes():
     assert terminal_frame._diagnostic_mouse_button(3) == "release"
 
 
+def test_native_mouse_mask_requests_drag_positions_when_supported():
+    from lwa_mcp import terminal_frame
+
+    expected = terminal_frame.curses.ALL_MOUSE_EVENTS | getattr(
+        terminal_frame.curses, "REPORT_MOUSE_POSITION", 0
+    )
+    assert terminal_frame._native_mouse_mask() == expected
+
+
 def test_native_tab_and_backtab_insert_five_spaces_without_focus_switch():
     from lwa_mcp import terminal_frame
     from lwa_mcp.prompt_editor import PromptEditor
