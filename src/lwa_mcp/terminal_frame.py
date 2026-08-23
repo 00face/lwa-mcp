@@ -499,6 +499,20 @@ def _cursor_position(
     return row, column
 
 
+def _sgr_left_drag(button: int, action: str) -> str | None:
+    """Classify SGR left-button press, motion, and release events."""
+    if button & 64:
+        return None
+    left_button = (button & 3) == 0
+    if not left_button:
+        return None
+    if action == "m":
+        return "release"
+    if button & 32:
+        return "motion"
+    return "press"
+
+
 def _draw_frame(
     screen: curses.window,
     *,
@@ -1422,12 +1436,15 @@ async def _interactive(
                     if native_tmux_pane:
                         lwa_point = lwa_selection_point(mouse_x, mouse_y, rows)
                         in_lwa_feed = lwa_point is not None
-                        if buttons & getattr(curses, "BUTTON1_PRESSED", 0) and in_lwa_feed:
+                        left_pressed = getattr(curses, "BUTTON1_PRESSED", 0)
+                        left_moved = getattr(curses, "BUTTON1_MOVED", 0)
+                        left_released = getattr(curses, "BUTTON1_RELEASED", 0)
+                        if buttons & (left_pressed | left_moved) and in_lwa_feed:
                             if lwa_selection_anchor is None:
                                 lwa_selection_anchor = lwa_point
                             lwa_selection_focus = lwa_point
                             continue
-                        if buttons & getattr(curses, "BUTTON1_RELEASED", 0) and lwa_selection_anchor is not None:
+                        if buttons & left_released and lwa_selection_anchor is not None:
                             if lwa_point is not None:
                                 lwa_selection_focus = lwa_point
                             selected, start, stop = lwa_selected_text(lwa_selection_anchor, lwa_selection_focus)
@@ -1435,8 +1452,6 @@ async def _interactive(
                                 clipboard_task = asyncio.create_task(
                                     copy_selection(selected, start, stop, "LWA")
                                 )
-                            lwa_selection_anchor = None
-                            lwa_selection_focus = None
                             continue
                     if buttons & getattr(curses, "BUTTON1_PRESSED", 0) and in_codex_feed:
                         if selection_anchor is None:
@@ -1531,21 +1546,22 @@ async def _interactive(
                             lwa_scroll = max(0, lwa_scroll - 3)
                         else:
                             lwa_scroll = min(len(_wrapped_lwa_lines(lwa_lines, max(1, columns - 4))), lwa_scroll + 3)
-                    elif mouse_button == 0 and mouse_y < rows - 6:
+                    elif mouse_y < rows - 6:
                         lwa_point = lwa_selection_point(mouse_x, mouse_y, rows)
                         if lwa_point is not None:
-                            if mouse_action == "M":
+                            drag_action = _sgr_left_drag(mouse_button, mouse_action)
+                            if drag_action == "press":
                                 lwa_selection_anchor = lwa_point
                                 lwa_selection_focus = lwa_point
-                            elif mouse_action == "m" and lwa_selection_anchor is not None:
+                            elif drag_action == "motion" and lwa_selection_anchor is not None:
+                                lwa_selection_focus = lwa_point
+                            elif drag_action == "release" and lwa_selection_anchor is not None:
                                 lwa_selection_focus = lwa_point
                                 selected, start, stop = lwa_selected_text(lwa_selection_anchor, lwa_selection_focus)
                                 if clipboard_task is None or clipboard_task.done():
                                     clipboard_task = asyncio.create_task(
                                         copy_selection(selected, start, stop, "LWA")
                                     )
-                                lwa_selection_anchor = None
-                                lwa_selection_focus = None
                     elif mouse_y >= rows - 6:
                         focus_to(Surface.LWA, "mouse")
                     continue

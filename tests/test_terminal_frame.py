@@ -133,6 +133,15 @@ def test_cursor_position_is_pane_local_and_bounded():
     ) is None
 
 
+def test_sgr_left_drag_classifies_press_motion_and_release():
+    from lwa_mcp import terminal_frame
+
+    assert terminal_frame._sgr_left_drag(0, "M") == "press"
+    assert terminal_frame._sgr_left_drag(32, "M") == "motion"
+    assert terminal_frame._sgr_left_drag(0, "m") == "release"
+    assert terminal_frame._sgr_left_drag(64, "M") is None
+
+
 @pytest.mark.parametrize(
     ("sequence", "expected"),
     [
