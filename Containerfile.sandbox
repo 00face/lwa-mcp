@@ -1,0 +1,17 @@
+# Build with digest-pinned Minimus references supplied explicitly:
+# podman build -f Containerfile.sandbox --build-arg PYTHON_DEV=... --build-arg PYTHON_RUNTIME=... .
+ARG PYTHON_DEV
+FROM ${PYTHON_DEV} AS build
+USER root
+WORKDIR /build
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN python -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir '.[dev]'
+
+ARG PYTHON_RUNTIME
+FROM ${PYTHON_RUNTIME} AS runtime
+WORKDIR /workspace
+COPY --from=build /opt/venv /opt/venv
+COPY --from=build /build/src /opt/lwa/src
+ENV PYTHONPATH=/opt/lwa/src PATH=/opt/venv/bin:$PATH
+ENTRYPOINT ["python"]
