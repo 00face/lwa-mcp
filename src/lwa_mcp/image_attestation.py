@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import json
+import re
 from typing import Any
 
 
@@ -29,7 +30,7 @@ def evaluate_grype_json(payload: str, *, max_critical: int = 0, max_high: int = 
 def verify_image_attestation(image: str, *, cosign_path: str | None = None, sbom_path: str | None = None, grype_path: str | None = None, expected_identity: str | None = None, oidc_issuer: str | None = None) -> dict[str, Any]:
     """Verify a digest-pinned image with Cosign and inspect an SBOM when tools exist."""
     blockers: list[str] = []
-    if "@sha256:" not in image:
+    if not re.fullmatch(r"[^\s@]+(?:/[^\s@]+)*@sha256:[0-9a-f]{64}", image):
         blockers.append("image_not_digest_pinned")
     cosign = cosign_path or shutil.which("cosign")
     sbom = sbom_path or shutil.which("syft")
@@ -47,9 +48,9 @@ def verify_image_attestation(image: str, *, cosign_path: str | None = None, sbom
         verify_args += ["--certificate-identity", expected_identity]
     if oidc_issuer:
         verify_args += ["--certificate-oidc-issuer", oidc_issuer]
-    signature = subprocess.run([*verify_args, image], capture_output=True, text=True, timeout=60, check=False)
-    inventory = subprocess.run([sbom, image, "-o", "json"], capture_output=True, text=True, timeout=120, check=False)
-    vulnerabilities = subprocess.run([grype, image, "-o", "json", "--fail-on", "critical"], capture_output=True, text=True, timeout=120, check=False)
+    signature = subprocess.run([*verify_args, image], capture_output=True, text=True, timeout=60, check=False, shell=False)
+    inventory = subprocess.run([sbom, image, "-o", "json"], capture_output=True, text=True, timeout=120, check=False, shell=False)
+    vulnerabilities = subprocess.run([grype, image, "-o", "json", "--fail-on", "critical"], capture_output=True, text=True, timeout=120, check=False, shell=False)
     if signature.returncode:
         blockers.append("signature_verification_failed")
     if inventory.returncode:
