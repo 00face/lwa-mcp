@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Lwa MCP Observatory</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="masthead">
+    <div>
+      <p class="eyebrow">LWA MCP · LOCAL FIRST · CROSS-PROJECT</p>
+      <h1>Lwa MCP</h1>
+      <p class="subtitle">Model routing, consent, quotas, repetition detection, and a persistent tool library.</p>
+    </div>
+    <div class="controls">
+      <label for="consent">Switch confirmation</label>
+      <select id="consent">
+        <option value="always_ask">Always ask</option>
+        <option value="paid_only">Ask for paid / user-pays</option>
+        <option value="automatic">Automatic</option>
+      </select>
+      <button id="refresh">Refresh catalogs and quotas</button>
+      <button id="analyze">Analyze repeated workflows</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="notice" class="notice" role="status" aria-live="polite">Loading Lwa MCP state…</section>
+
+    <section class="panel launch-panel">
+      <div class="panel-heading"><div><p class="eyebrow">LWA FRAME</p><h2>Graphical Codex workspace</h2></div></div>
+      <div class="launch-copy">
+        <p>Open the low-resource PTY-backed Codex workspace with LWA Prompt, Codex Feed, LWA Feed, and optional shader rendering.</p>
+        <div class="launch-actions"><a class="launch-button" href="/codex">Open framed Codex</a></div>
+      </div>
+    </section>
+
+    <section class="panel launch-panel">
+      <div class="panel-heading"><div><p class="eyebrow">TEST CONTROL</p><h2>Polymino control surface</h2></div></div>
+      <div class="launch-copy">
+        <p>
+          Open the gold, silver, and platinum polymino game for LWA-MCP and LWA Plugin testing.
+          It includes monomino through tridecomino pieces, keyboard controls, and a dedicated
+          accessibility-first control panel.
+        </p>
+        <div class="launch-actions">
+          <a class="launch-button" href="/static/polymino-control.html">Open polymino control</a>
+          <a class="launch-note" href="/static/polymino-control-workflow.html">Workflow note</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel credentials-panel">
+      <div class="panel-heading"><div><p class="eyebrow">PROTECTED LOCAL STORE</p><h2>Provider keys</h2></div></div>
+      <div class="credentials-layout">
+        <div id="credentials" class="cards-list"></div>
+        <form id="credentialForm" class="credential-form">
+          <label for="credentialName">Provider credential</label>
+          <select id="credentialName"></select>
+          <label for="credentialValue">New value</label>
+          <input id="credentialValue" type="password" autocomplete="new-password" placeholder="Paste a new key or token" />
+          <small>Values are sent only to this local dashboard, stored in Lwa’s 0600 env file, and never returned after saving.</small>
+          <div class="form-actions"><button type="submit">Add / replace key</button><button id="deleteCredential" type="button" class="danger-button">Delete selected</button></div>
+        </form>
+      </div>
+    </section>
+
+    <section class="metrics" aria-label="usage summary">
+      <article><span>Today</span><strong id="todayRequests">—</strong><small>requests</small></article>
+      <article><span>Today</span><strong id="todayTokens">—</strong><small>tokens</small></article>
+      <article><span>This month</span><strong id="monthCost">—</strong><small>tracked cost</small></article>
+      <article><span>Catalog</span><strong id="modelCount">—</strong><small>models</small></article>
+      <article><span>Tool library</span><strong id="toolCount">—</strong><small>active tools</small></article>
+      <article><span>Patterns</span><strong id="patternCount">—</strong><small>detected workflows</small></article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading"><div><p class="eyebrow">ROUTING FABRIC</p><h2>Providers and local caps</h2></div></div>
+      <div class="table-wrap"><table id="providersTable">
+        <thead><tr><th>Provider</th><th>State</th><th>Billing</th><th>Subscription</th><th>Daily</th><th>Monthly spend</th><th>Adapter</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading"><div><p class="eyebrow">MODEL TIERS</p><h2>Declared free-plan capacity</h2></div></div>
+      <div class="table-wrap"><table id="tiersTable">
+        <thead><tr><th>Rank</th><th>Model</th><th>Free max tokens</th><th>Pro max tokens</th><th>Subscription</th><th>Context</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </section>
+
+    <section class="grid-two">
+      <section class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">PERSISTENT LIBRARY</p><h2>Reusable tools</h2></div></div>
+        <div id="library" class="cards-list"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">PATTERN ENGINE</p><h2>Repeated workflows</h2></div></div>
+        <div id="patterns" class="cards-list"></div>
+      </section>
+    </section>
+
+    <section class="grid-two">
+      <section class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">OBSERVED LIMITS</p><h2>Latest quota headers</h2></div></div>
+        <div id="quotas" class="cards-list"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">HEALTH</p><h2>Catalog probes</h2></div></div>
+        <div id="health" class="cards-list"></div>
+      </section>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading"><div><p class="eyebrow">LEDGER</p><h2>Recent executions</h2></div></div>
+      <div class="table-wrap"><table id="recentTable">
+        <thead><tr><th>Time</th><th>Task</th><th>Route</th><th>Billing</th><th>Tokens</th><th>Latency</th><th>Status</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading"><div><p class="eyebrow">STRICT PREFLIGHT</p><h2>Before Working ledger</h2></div></div>
+      <div id="preflights" class="route-list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading"><div><p class="eyebrow">DECISION TRACE</p><h2>Recent route choices</h2></div></div>
+      <div id="routes" class="route-list"></div>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

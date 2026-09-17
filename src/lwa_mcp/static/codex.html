@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Lwa Frame · Codex</title>
+  <link rel="stylesheet" href="/static/codex.css" />
+</head>
+<body class="low-resource">
+  <main class="lwa-frame">
+    <header class="lwa-header">
+      <div><p class="eyebrow">LWA FRAME</p><h1>Codex Workspace</h1></div>
+      <div class="header-actions">
+        <a href="/" class="button">Observatory</a>
+        <label class="toggle" for="lowResource"><input id="lowResource" type="checkbox" checked /> Low resource</label>
+        <label class="toggle" for="shaders"><input id="shaders" type="checkbox" checked /> Shaders</label>
+      </div>
+    </header>
+
+    <section class="codex-panel" aria-labelledby="codexTitle">
+      <div class="panel-title"><h2 id="codexTitle">Codex Feed</h2><span id="connection" role="status">Connecting…</span></div>
+      <nav class="terminal-tabs" aria-label="Codex terminal tabs"><div id="terminalTabs" role="tablist" aria-label="Open terminals"></div><button id="newTab" class="button" type="button">New terminal</button></nav>
+      <div class="terminal-shell">
+        <canvas id="shaderCanvas" aria-hidden="true"></canvas>
+        <canvas id="terminalCanvas" tabindex="0" role="log" aria-live="off" aria-label="Codex terminal feed"></canvas>
+        <div id="graphicsLayer" class="graphics-layer" aria-label="Codex graphics"></div>
+        <div id="terminalCommandSuggestions" class="command-suggestions terminal-command-suggestions" role="listbox" aria-label="Codex terminal slash commands" hidden></div>
+        <p id="petStatus" class="sr-only" aria-live="polite">Pet is loading.</p>
+        <p id="terminalFallback" class="sr-only" aria-live="polite">Codex terminal is connecting.</p>
+      </div>
+      <details class="terminal-transcript">
+        <summary>Accessible text transcript</summary>
+        <div class="transcript-actions">
+          <label class="toggle" for="followOutput"><input id="followOutput" type="checkbox" checked /> Follow output</label>
+          <button id="selectTranscript" class="button" type="button">Select text</button>
+          <button id="copyTranscript" class="button" type="button">Copy transcript</button>
+          <button id="downloadTranscript" class="button" type="button">Download</button>
+        </div>
+        <pre id="terminalText" tabindex="0" role="log" aria-live="off" aria-label="Codex text transcript">Codex terminal is connecting.</pre>
+      </details>
+      <form id="codexPrompt" class="codex-prompt">
+        <label for="directPrompt">Codex Prompt</label>
+        <div class="prompt-row prompt-row-with-suggestions"><input id="directPrompt" autocomplete="off" aria-controls="codexCommandSuggestions" aria-expanded="false" placeholder="Direct terminal input" /><button type="submit" class="button">Send</button><div id="codexCommandSuggestions" class="command-suggestions" role="listbox" aria-label="Codex slash commands" hidden></div></div>
+      </form>
+    </section>
+
+    <section class="lwa-feed" aria-labelledby="lwaFeedTitle">
+      <div class="panel-title"><h2 id="lwaFeedTitle">LWA Feed</h2><div><button id="selectLwaFeed" class="button" type="button">Select</button> <button id="copyLwaFeed" class="button" type="button">Copy</button> <button id="pauseFeed" class="button" type="button">Pause feed</button> <button id="clearFeed" class="button" type="button">Clear</button></div></div>
+      <ol id="feed" aria-live="polite" aria-atomic="false"><li>Starting local PTY session…</li></ol>
+    </section>
+
+    <form id="lwaPrompt" class="lwa-prompt">
+      <label for="prompt">LWA Prompt</label>
+        <div class="prompt-row"><textarea id="prompt" rows="3" aria-describedby="lwaPromptHint" placeholder="Enter a prompt for LWA to forward to Codex…"></textarea><div class="prompt-actions"><button id="transferResponse" type="button" class="button">Transfer Codex response</button><button type="submit" class="button primary">Send through LWA</button></div></div>
+      <small id="lwaPromptHint">LWA Prompt is the preferred input. Direct Codex Prompt remains available for terminal compatibility.</small>
+    </form>
+  </main>
+  <div id="lwaModal" class="modal-backdrop" hidden>
+    <section class="lwa-modal" role="dialog" aria-modal="true" aria-labelledby="lwaModalTitle" aria-describedby="lwaModalDescription">
+      <div class="panel-title"><h2 id="lwaModalTitle">LWA options</h2><button id="closeLwaModal" class="button" type="button">Close</button></div>
+      <p id="lwaModalDescription">Choose an LWA action.</p>
+      <div id="lwaModalOptions" class="modal-options" role="listbox" aria-label="LWA options"></div>
+    </section>
+  </div>
+  <script src="/static/codex.js" defer></script>
+</body>
+</html>
