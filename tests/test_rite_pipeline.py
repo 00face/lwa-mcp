@@ -45,8 +45,8 @@ def test_rite_pipeline_runs_in_worktree_and_verifies_before_promotion(tmp_path):
     subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "fixture"], cwd=tmp_path, check=True)
     result = run_rite(rite, tmp_path, "new", RiteState(tmp_path / "state.json"),
                       agent_runner=runner, kernel=ConstraintKernel({"version": 1, "hard": {}}), approved=True,
-                      attestation={"verified": True}, image="registry.test/lwa@sha256:" + "a" * 64,
-                      runtime_evidence={"rootless": True, "network_disabled": True, "read_only": True, "no_new_privs": True},
+                      attestation={"verified": True, "image": "registry.test/lwa@sha256:" + "a" * 64}, image="registry.test/lwa@sha256:" + "a" * 64,
+                      runtime_evidence={"image": "registry.test/lwa@sha256:" + "a" * 64, "rootless": True, "network_disabled": True, "read_only": True, "no_new_privs": True},
                       evidence={"image": "registry.test/lwa@sha256:" + "a" * 64, "attestation": {"sha256": "a" * 64}, "sbom": {"sha256": "b" * 64}, "vulnerabilities": {"sha256": "c" * 64}, "runtime": {"sha256": "d" * 64}})
     assert result["status"] in {"ready", "blocked"}
     assert "image_gate" not in result or result["image_gate"]["passed"] is True
@@ -83,7 +83,7 @@ def test_rite_pipeline_collects_evidence_before_running_agent(tmp_path):
         calls.append(actual_image)
         item = {"sha256": "a" * 64}
         return {"image": actual_image, "attestation": item, "sbom": item, "vulnerabilities": item, "runtime": item}
-    result = run_rite(rite, tmp_path, "new", RiteState(tmp_path / "state.json"), agent_runner=lambda *_: {"changed_paths": ["README.md"], "files": {"README.md": "updated\n"}, "terminal": {"tests": True, "lint": True, "git_diff_check": True, "secret_scan": True, "protected_files_unchanged": True}}, kernel=ConstraintKernel({"version": 1, "hard": {}}), attestation={"verified": True}, image=image, runtime_evidence={"rootless": True, "network_disabled": True, "read_only": True, "no_new_privs": True}, evidence_collector=collect)
+    result = run_rite(rite, tmp_path, "new", RiteState(tmp_path / "state.json"), agent_runner=lambda *_: {"changed_paths": ["README.md"], "files": {"README.md": "updated\n"}, "terminal": {"tests": True, "lint": True, "git_diff_check": True, "secret_scan": True, "protected_files_unchanged": True}}, kernel=ConstraintKernel({"version": 1, "hard": {}}), attestation={"verified": True, "image": image}, image=image, runtime_evidence={"image": image, "rootless": True, "network_disabled": True, "read_only": True, "no_new_privs": True}, evidence_collector=collect)
     assert calls == [image]
     assert result["status"] in {"ready", "blocked"}
     assert "image_gate" not in result or result["image_gate"]["passed"] is True

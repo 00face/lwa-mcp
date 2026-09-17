@@ -15,11 +15,11 @@ def evaluate_grype_json(payload: str, *, max_critical: int = 0, max_high: int = 
     except json.JSONDecodeError:
         return {"verified": False, "blockers": ["malformed_grype_output"]}
     matches = data.get("matches")
-    if not isinstance(matches, list) or not isinstance(data.get("distro", {}), dict):
+    if not isinstance(matches, list) or not all(isinstance(item, dict) for item in matches) or not isinstance(data.get("distro"), dict):
         return {"verified": False, "blockers": ["malformed_grype_output"]}
     counts = {severity: sum(1 for item in matches if item.get("vulnerability", {}).get("severity", "").lower() == severity) for severity in ("critical", "high", "medium", "low")}
     blockers = []
-    distro = data.get("distro", {})
+    distro = data["distro"]
     if reject_eol and distro.get("eol") is True:
         blockers.append("eol_distribution")
     if counts["critical"] > max_critical:

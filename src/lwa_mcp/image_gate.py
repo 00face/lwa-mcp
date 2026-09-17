@@ -9,9 +9,9 @@ def evaluate_image_gate(*, image: str, attestation: dict[str, Any], runtime: dic
         blockers.append("image_not_digest_pinned")
     if attestation.get("verified") is not True:
         blockers.extend(attestation.get("blockers", ["image_attestation_failed"]))
-    if attestation.get("image") not in (None, image):
+    if attestation.get("image") != image:
         blockers.append("attestation_digest_mismatch")
-    if runtime.get("image") not in (None, image):
+    if runtime.get("image") != image:
         blockers.append("runtime_digest_mismatch")
     required = {"rootless": True, "network_disabled": True, "read_only": True, "no_new_privs": True}
     for key, expected in required.items():

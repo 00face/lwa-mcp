@@ -2,6 +2,8 @@
 from __future__ import annotations
 import hashlib
 import json
+import re
+from tempfile import NamedTemporaryFile
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +31,7 @@ def validate_evidence(record: dict[str, Any], image: str, *, required: tuple[str
         blockers.append("evidence_digest_mismatch")
     for name in required:
         item = record.get(name)
-        if not isinstance(item, dict) or not item.get("sha256"):
+        if not isinstance(item, dict) or not re.fullmatch(r"[0-9a-f]{64}", str(item.get("sha256", ""))):
             blockers.append(f"evidence_missing:{name}")
     return {"schema": "lwa-evidence/v1", "image": image, "valid": not blockers, "blockers": blockers}
 
@@ -39,7 +41,9 @@ def write_evidence(path: str | Path, record: dict[str, Any]) -> None:
         raise ValueError("evidence record exceeds 256 KiB")
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    temporary = target.with_suffix(target.suffix + ".tmp")
-    temporary.write_text(payload, encoding="utf-8")
+    with NamedTemporaryFile(mode="w", encoding="utf-8", dir=target.parent, prefix=f".{target.name}.", suffix=".tmp", delete=False) as stream:
+        stream.write(payload)
+        stream.flush()
+        temporary = Path(stream.name)
     temporary.chmod(0o600)
     temporary.replace(target)

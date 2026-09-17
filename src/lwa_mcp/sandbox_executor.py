@@ -14,21 +14,23 @@ class SandboxUnavailable(RuntimeError):
     """Raised when no supported container runtime is available."""
 
 
-def sandbox_command(root: str | Path, command: Sequence[str], *, image: str = "python:3.12-slim", memory: str = "512m") -> list[str]:
+def sandbox_command(root: str | Path, command: Sequence[str], *, image: str = "python:3.12-slim", memory: str = "512m", runtime: str | None = None) -> list[str]:
     """Build a network-disabled, resource-limited container invocation."""
-    runtime = shutil.which("podman") or shutil.which("docker")
-    if runtime is None:
+    selected_runtime = runtime or shutil.which("podman") or shutil.which("docker")
+    if selected_runtime is None:
         raise SandboxUnavailable("podman or docker is required")
+    if Path(selected_runtime).name not in {"podman", "docker"}:
+        raise SandboxUnavailable("runtime must be podman or docker")
     if not command:
         raise ValueError("sandbox command must not be empty")
-    return [runtime, "run", "--rm", "--network=none", "--memory", memory,
+    return [selected_runtime, "run", "--rm", "--network=none", "--memory", memory,
             "--cap-drop=ALL", "--security-opt=no-new-privileges", "--read-only", "--pids-limit=256", "-v",
             f"{Path(root).resolve()}:/workspace:rw", "-w", "/workspace", image, *command]
 
 
-def run_sandbox(root: str | Path, command: Sequence[str], *, image: str = "python:3.12-slim", memory: str = "512m", timeout: int = 600) -> subprocess.CompletedProcess[str]:
+def run_sandbox(root: str | Path, command: Sequence[str], *, image: str = "python:3.12-slim", memory: str = "512m", timeout: int = 600, runtime: str | None = None) -> subprocess.CompletedProcess[str]:
     """Execute one bounded command; caller decides whether output is promotable."""
-    invocation = sandbox_command(root, command, image=image, memory=memory)
+    invocation = sandbox_command(root, command, image=image, memory=memory, runtime=runtime)
     return trusted_run(invocation, timeout=timeout)
 
 def probe_sandbox(root: str | Path, *, image: str, memory: str = "512m", timeout: int = 60) -> dict[str, object]:

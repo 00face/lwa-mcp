@@ -18,7 +18,7 @@ class SignerPolicy:
         identity, issuer = values.get("LWA_COSIGN_IDENTITY", ""), values.get("LWA_COSIGN_ISSUER", "")
         if not identity or not issuer or "*" in identity or "*" in issuer:
             raise SignerPolicyError("explicit signer identity and issuer are required")
-        if not re.match(r"^https?://", issuer):
+        if not re.fullmatch(r"https://[^\s/]+(?:/[^\s]*)?", issuer):
             raise SignerPolicyError("issuer must be an HTTPS URL")
         return cls(identity, issuer)
 

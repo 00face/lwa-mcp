@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import subprocess
+import json
 from pathlib import Path
 from typing import Any, Callable
 
@@ -41,7 +42,10 @@ def collect_local_evidence(
         destination.write_text(result.stdout or "", encoding="utf-8")
         if result.returncode != 0:
             raise RuntimeError(f"assurance command failed: {command[0]}")
-    runtime.write_text(__import__("json").dumps(runtime_probe(), sort_keys=True), encoding="utf-8")
+    runtime_result = runtime_probe()
+    if runtime_result.get("verified") is not True:
+        raise RuntimeError("runtime probe did not verify sandbox controls")
+    runtime.write_text(json.dumps(runtime_result, sort_keys=True), encoding="utf-8")
     record = evidence_record(image, attestation=attestation, sbom=sbom, vulnerabilities=vulnerabilities, runtime=runtime)
     write_evidence(target / "evidence.json", record)
     return record
