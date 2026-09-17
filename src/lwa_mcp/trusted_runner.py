@@ -18,16 +18,15 @@ def trusted_run(command: Sequence[str], *, timeout: int, capture_output: bool = 
         executable = Path(resolved).resolve()
     args = list(command[1:])
     name = executable.name
+    options = {"capture_output": capture_output, "text": True, "timeout": timeout, "check": False, "shell": False}
     if name == "cosign":
-        argv = ["cosign", *args]
-    elif name == "syft":
-        argv = ["syft", *args]
-    elif name == "grype":
-        argv = ["grype", *args]
-    elif name == "podman":
-        argv = ["podman", *args]
-    elif name == "docker":
-        argv = ["docker", *args]
-    else:
-        argv = ["python", *args]
-    return subprocess.run(argv, capture_output=capture_output, text=True, timeout=timeout, check=False, shell=False)
+        return subprocess.run(["cosign", *args], **options)
+    if name == "syft":
+        return subprocess.run(["syft", *args], **options)
+    if name == "grype":
+        return subprocess.run(["grype", *args], **options)
+    if name == "podman":
+        return subprocess.run(["podman", *args], **options)
+    if name == "docker":
+        return subprocess.run(["docker", *args], **options)
+    return subprocess.run(["python", *args], **options)
