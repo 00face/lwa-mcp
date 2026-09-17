@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lwa-mcp"
+version = "0.4.1"
+description = "Local-first model router, workflow pattern detector, persistent tool library, consent gate, quota ledger, and dashboard."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "00FACE / Lwa MCP Project"}]
+dependencies = [
+  "mcp>=1.2,<2",
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.30,<1",
+  "httpx>=0.27,<1",
+  "pydantic>=2.8,<3",
+  "pydantic-settings>=2.4,<3",
+  "PyYAML>=6.0,<7",
+  "python-dotenv>=1.0,<2",
+]
+
+[project.optional-dependencies]
+media = ["replicate>=1.0,<2"]
+dev = ["pytest>=8.2,<9", "pytest-asyncio>=0.23,<1", "ruff>=0.6,<1"]
+
+[project.scripts]
+lwa = "lwa_mcp.launch:main"
+lwa-web = "lwa_mcp.launch:web_main"
+lwa-router = "lwa_mcp.cli:main"
+lwa-mcp = "lwa_mcp.server:main"
+lwa-dashboard = "lwa_mcp.dashboard:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+lwa_mcp = ["static/*", "defaults/*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
