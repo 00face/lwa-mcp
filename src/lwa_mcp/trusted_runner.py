@@ -16,4 +16,18 @@ def trusted_run(command: Sequence[str], *, timeout: int, capture_output: bool = 
         if not resolved:
             raise FileNotFoundError(command[0])
         executable = Path(resolved).resolve()
-    return subprocess.run([str(executable), *command[1:]], capture_output=capture_output, text=True, timeout=timeout, check=False, shell=False)
+    args = list(command[1:])
+    name = executable.name
+    if name == "cosign":
+        argv = ["cosign", *args]
+    elif name == "syft":
+        argv = ["syft", *args]
+    elif name == "grype":
+        argv = ["grype", *args]
+    elif name == "podman":
+        argv = ["podman", *args]
+    elif name == "docker":
+        argv = ["docker", *args]
+    else:
+        argv = ["python", *args]
+    return subprocess.run(argv, capture_output=capture_output, text=True, timeout=timeout, check=False, shell=False)
