@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import json
+from .trusted_runner import trusted_run
 from pathlib import Path
 from typing import Sequence
 
@@ -28,7 +29,7 @@ def sandbox_command(root: str | Path, command: Sequence[str], *, image: str = "p
 def run_sandbox(root: str | Path, command: Sequence[str], *, image: str = "python:3.12-slim", memory: str = "512m", timeout: int = 600) -> subprocess.CompletedProcess[str]:
     """Execute one bounded command; caller decides whether output is promotable."""
     invocation = sandbox_command(root, command, image=image, memory=memory)
-    return subprocess.run(invocation, capture_output=True, text=True, timeout=timeout, check=False, shell=False)
+    return trusted_run(invocation, timeout=timeout)
 
 def probe_sandbox(root: str | Path, *, image: str, memory: str = "512m", timeout: int = 60) -> dict[str, object]:
     """Observe effective container controls using a small in-image probe."""

@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import json
 import re
+from .trusted_runner import trusted_run
 from typing import Any
 
 
@@ -48,9 +49,9 @@ def verify_image_attestation(image: str, *, cosign_path: str | None = None, sbom
         verify_args += ["--certificate-identity", expected_identity]
     if oidc_issuer:
         verify_args += ["--certificate-oidc-issuer", oidc_issuer]
-    signature = subprocess.run([*verify_args, image], capture_output=True, text=True, timeout=60, check=False, shell=False)
-    inventory = subprocess.run([sbom, image, "-o", "json"], capture_output=True, text=True, timeout=120, check=False, shell=False)
-    vulnerabilities = subprocess.run([grype, image, "-o", "json", "--fail-on", "critical"], capture_output=True, text=True, timeout=120, check=False, shell=False)
+    signature = trusted_run([*verify_args, image], timeout=60)
+    inventory = trusted_run([sbom, image, "-o", "json"], timeout=120)
+    vulnerabilities = trusted_run([grype, image, "-o", "json", "--fail-on", "critical"], timeout=120)
     if signature.returncode:
         blockers.append("signature_verification_failed")
     if inventory.returncode:
