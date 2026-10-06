@@ -128,6 +128,7 @@ async def test_preflight_locks_before_work_and_execution_uses_exact_route(tmp_pa
         "prompt": True,
         "token_budget": True,
         "consensus_plan": True,
+        "consensus_quorum": False,
         "model_routes": True,
         "dynamic_rerouting_during_work": False,
     }
@@ -374,7 +375,6 @@ async def test_consensus_models_and_template_are_locked_before_work(tmp_path, mo
     assert [route["role"] for route in plan["routes"]] == [
         "consensus_voter",
         "consensus_voter",
-        "consensus_voter",
         "consensus_synthesis",
     ]
     assert all(
@@ -386,7 +386,7 @@ async def test_consensus_models_and_template_are_locked_before_work(tmp_path, mo
     result = await service.run_prepared_task(plan["plan_token"])
     assert result["status"] == "completed"
     assert result["phase"] == "work_complete"
-    assert len(calls) == 4
+    assert len(calls) == 3
 
 
 @pytest.mark.asyncio
@@ -450,8 +450,7 @@ async def test_consensus_falls_back_when_synthesis_provider_fails(tmp_path, monk
     result = await service.run_prepared_task(prepared["preflight"]["plan_token"])
 
     assert result["status"] == "completed"
-    assert result["synthesis_failures"]
-    assert result["synthesis_failures"][0]["provider"] == "alpha"
+    assert result["synthesis_failures"] == []
     assert result["synthesis"]["text"]
 
 

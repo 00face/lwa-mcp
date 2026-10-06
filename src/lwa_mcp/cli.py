@@ -193,7 +193,7 @@ async def run_task(args: argparse.Namespace) -> int:
             "workflow_tags": args.tag or [],
         },
     )
-    prepared = await svc.prepare_task(request)
+    prepared = await svc.prepare_prompt(request)
     result = await _finish_preflight_cli(
         svc,
         prepared,

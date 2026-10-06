@@ -4,7 +4,7 @@ import os
 import shutil
 from importlib.resources import files
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from dotenv import dotenv_values
@@ -40,7 +40,14 @@ class RouterSettings(BaseModel):
     dashboard_port: int = 8766
     catalog_refresh_minutes: int = 30
     confirmation_ttl_seconds: int = 600
-    max_parallel_consensus: int = 3
+    max_parallel_consensus: int = 2
+    consensus_policy: Literal["adaptive", "always", "off"] = "adaptive"
+    consensus_voters: int = Field(default=2, ge=2, le=8)
+    consensus_agreement_threshold: float = Field(default=0.85, ge=0.5, le=1.0)
+    session_token_ceiling: int = Field(default=50_000, ge=0)
+    session_token_warning_thresholds: list[float] = Field(default_factory=lambda: [0.5, 0.8, 1.0])
+    economy_output_tokens: int = Field(default=700, ge=1, le=100_000)
+    auxiliary_provider_mode: Literal["third_party_first", "configured"] = "third_party_first"
 
     # Persistent reusable-tool doctrine.
     auto_detect_patterns: bool = True

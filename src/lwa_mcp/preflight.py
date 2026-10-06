@@ -109,6 +109,7 @@ class PreflightStore:
                 "prompt": True,
                 "token_budget": True,
                 "consensus_plan": True,
+                "consensus_quorum": mode == "consensus",
                 "model_routes": True,
                 "dynamic_rerouting_during_work": False,
             },
@@ -117,6 +118,7 @@ class PreflightStore:
             call_id=first_request.metadata.get("call_id"),
             parent_call_id=first_request.metadata.get("parent_call_id"),
             tool_name=first_request.metadata.get("tool_name", "router_service"),
+            consensus_policy=first_request.metadata.get("consensus_policy", {}),
             created_at=now,
             expires_at_epoch=time.time() + self.ttl_seconds,
         )
