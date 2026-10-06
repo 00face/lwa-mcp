@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 
 from ..models import Capability, CompletionResult, ModelCandidate, RouteRequest
-from .base import ProviderAdapter, ProviderError, redact_error
+from .base import ProviderAdapter, ProviderError, redact_error, security_denial
 
 
 class GeminiAdapter(ProviderAdapter):
@@ -71,9 +71,20 @@ class GeminiAdapter(ProviderAdapter):
             raise ProviderError(f"{self.config.name}: request timed out") from exc
         latency_ms = int((time.perf_counter() - started) * 1000)
         if response.status_code >= 400:
+            body = redact_error(response.text[:1000])
+            lower_body = body.lower()
+            retry_after = None
+            if response.status_code == 429:
+                try:
+                    retry_after = float(response.headers.get("retry-after", ""))
+                except ValueError:
+                    retry_after = None
             raise ProviderError(
-                f"{self.config.name} HTTP {response.status_code}: "
-                f"{redact_error(response.text[:1000])}"
+                f"{self.config.name} HTTP {response.status_code}: {body}",
+                status_code=response.status_code,
+                quota_exhausted=any(marker in lower_body for marker in ("quota", "resource_exhausted", "daily limit")),
+                security_denied=security_denial(lower_body),
+                retry_after_seconds=retry_after,
             )
         data = self.decode_json(response, f"{self.config.name} completion")
         candidates = data.get("candidates") or []

@@ -23,7 +23,36 @@ allow_reviewed_script_execution: false
 post_response_tier_guidance: true
 post_response_tier_guidance_mode: codex_request
 
+# Provider-order policy. The Codex host remains the primary execution owner;
+# provider chains control Lwa's eligible model preference and future fallback.
+routing:
+  mode: codex_first        # codex_first | third_party_first | manual
+  sticky_scope: session
+  routes:
+    codex_first: [codex, openrouter, anthropic, gemini]
+    third_party_first: [openrouter, anthropic, gemini, codex]
+
 providers:
+  codex:
+    name: codex
+    adapter: codex
+    billing_class: free_quota
+    subscription_plan: ChatGPT Codex
+    subscription_status: unknown
+    supports_live_models: false
+  anthropic:
+    name: anthropic
+    adapter: anthropic
+    base_url: https://api.anthropic.com
+    api_key_env: ANTHROPIC_API_KEY
+    billing_class: paid
+    subscription_plan: Anthropic
+  bedrock:
+    name: bedrock
+    adapter: bedrock
+    enabled: false
+    disabled_reason: "Requires AWS Bedrock credentials and a configured regional gateway."
+    billing_class: paid
   gemini:
     name: gemini
     adapter: gemini
@@ -170,6 +199,21 @@ providers:
 # Scores are 0-100 task affinity values. Exact model availability is validated at runtime.
 # Unknown live models remain eligible at a neutral score, but these seeds win normal routing.
 models:
+  - provider: codex
+    model: gpt-5.6-sol
+    display_name: ChatGPT Codex plan
+    billing_class: free_quota
+    context_length: 400000
+    capabilities: [text, reasoning, tools, structured]
+    reasoning_levels: [instant, medium, high]
+    task_scores: {query: 95, planning: 98, verification: 98, coding_aux: 98, document_editing: 96}
+  - provider: anthropic
+    model: claude-sonnet-4-5
+    display_name: Anthropic Claude Sonnet
+    billing_class: paid
+    context_length: 200000
+    capabilities: [text, reasoning, tools, structured]
+    task_scores: {query: 94, planning: 96, verification: 95, coding_aux: 96, document_editing: 95}
   - provider: gemini
     model: gemini-2.5-flash
     display_name: Gemini 2.5 Flash

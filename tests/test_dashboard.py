@@ -59,7 +59,7 @@ def test_dashboard_metadata_and_provider_payload_are_redacted(tmp_path, monkeypa
 
     monkeypatch.setattr(dashboard, "service", service)
 
-    assert dashboard.app.version == "0.4.1"
+    assert dashboard.app.version == "0.4.2"
     payload = dashboard.providers()
     assert payload[0]["configured"] is True
     assert "dashboard-secret-value" not in repr(payload)

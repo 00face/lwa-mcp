@@ -11,6 +11,7 @@ from dotenv import dotenv_values
 from pydantic import BaseModel, Field
 
 from .models import ConsentMode, ModelCandidate, ProviderConfig, parse_consent_mode
+from .provider_policy import DEFAULT_ROUTES, RoutingMode
 
 APP_NAME = "lwa-mcp"
 STATE_DIR = Path(os.getenv("XDG_STATE_HOME", Path.home() / ".local/state")) / APP_NAME
@@ -20,6 +21,14 @@ DEFAULT_ENV_FILE = STATE_DIR / "lwa.env"
 DEFAULT_CONFIG_FILE = CONFIG_DIR / "router.yaml"
 DEFAULT_DB_FILE = STATE_DIR / "lwa.sqlite3"
 DEFAULT_TOOL_LIBRARY_DIR = DATA_DIR / "tool-library"
+
+
+class RoutingSettings(BaseModel):
+    mode: RoutingMode = RoutingMode.CODEX_FIRST
+    routes: dict[str, list[str]] = Field(
+        default_factory=lambda: {name: list(order) for name, order in DEFAULT_ROUTES.items()}
+    )
+    sticky_scope: str = "session"
 
 
 class RouterSettings(BaseModel):
@@ -47,6 +56,8 @@ class RouterSettings(BaseModel):
     # near-zero control-plane path unless an operator explicitly enables it.
     post_response_tier_guidance: bool = True
     post_response_tier_guidance_mode: str = "codex_request"
+
+    routing: RoutingSettings = Field(default_factory=RoutingSettings)
 
     providers: dict[str, ProviderConfig] = Field(default_factory=dict)
     models: list[ModelCandidate] = Field(default_factory=list)

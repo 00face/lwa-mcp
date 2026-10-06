@@ -1,0 +1,7 @@
+interface:
+  display_name: "Lwa Optimize"
+  short_description: "Optimize prompts under Lwa controls"
+  default_prompt: "Use $lwa-optimize to optimize this prompt or conversation:"
+
+policy:
+  allow_implicit_invocation: false

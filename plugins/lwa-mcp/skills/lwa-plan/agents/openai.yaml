@@ -1,0 +1,7 @@
+interface:
+  display_name: "Lwa Plan"
+  short_description: "Plan with locked routing and budgets"
+  default_prompt: "Use $lwa-plan to prepare this plan with Lwa MCP:"
+
+policy:
+  allow_implicit_invocation: false

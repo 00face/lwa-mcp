@@ -9,7 +9,24 @@ from ..models import CompletionResult, ModelCandidate, ProviderConfig, RouteRequ
 
 
 class ProviderError(RuntimeError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        rate_limit_reached_type: str | None = None,
+        quota_exhausted: bool = False,
+        security_denied: bool = False,
+        retry_after_seconds: float | None = None,
+        reset_at: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.rate_limit_reached_type = rate_limit_reached_type
+        self.quota_exhausted = quota_exhausted
+        self.security_denied = security_denied
+        self.retry_after_seconds = retry_after_seconds
+        self.reset_at = reset_at
 
 
 _BEARER_RE = re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._~+/=-]+")
@@ -33,6 +50,15 @@ def redact_error(message: str) -> str:
         if value and len(value) >= 4:
             redacted = redacted.replace(value, "[REDACTED]")
     return redacted[:2000]
+
+
+def security_denial(detail: str) -> bool:
+    """Recognize provider policy/safety denials without guessing from 403 alone."""
+    lower = detail.lower()
+    return any(
+        marker in lower
+        for marker in ("content_policy", "policy_violation", "content filter", "safety policy", "moderation")
+    )
 
 
 class ProviderAdapter(ABC):

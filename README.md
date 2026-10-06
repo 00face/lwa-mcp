@@ -1,4 +1,4 @@
-# Lwa MCP — Model Router and Persistent Tool Library v0.4.1
+# Lwa MCP — Model Router and Persistent Tool Library v0.4.2
 
 Lwa MCP is a local-first Model Context Protocol server that routes auxiliary work to suitable configured models, bootstraps provider credentials through a protected first-run wizard, enforces spending consent and quotas, detects repeated successful workflows, and turns stable patterns into documented reusable tools. Paid and user-pays routes are disabled by default: a caller must explicitly allow the billing class and local configuration must allow it before preflight can select that route. Confirmation remains a separate execution gate.
 
@@ -6,20 +6,23 @@ It is intended to sit beside Codex, SOL, Terra, Luna, or another primary enginee
 
 ## Included provider pipelines
 
-Google Gemini, OpenAI/ChatGPT, OpenRouter, Groq, Mistral, Cloudflare Workers AI, SiliconFlow, Venice, Pollinations, Cohere, Replicate, Stability AI, NVIDIA Build/NIM, Z.AI, Aion Labs, ZenMux, Cerebras, BLACKBOX AI, and Puter.
+Codex app-server, Anthropic, AWS Bedrock, Google Gemini, OpenAI/ChatGPT, OpenRouter, Groq, Mistral, Cloudflare Workers AI, SiliconFlow, Venice, Pollinations, Cohere, Replicate, Stability AI, NVIDIA Build/NIM, Z.AI, Aion Labs, ZenMux, Cerebras, BLACKBOX AI, and Puter.
 
 Most text services share one audited OpenAI-compatible adapter. Official OpenAI image/video generation uses a dedicated media adapter; Gemini, Replicate, and Stability retain dedicated adapters because their request and result formats differ. Image generation is routed by capability, so any configured provider/model pair that advertises `image` remains eligible.
 
 ## Core routing behavior
 
 - Scores task affinity, capabilities, context headroom, quality, billing class, local caps, and availability; an explicit `preferred_providers` list is honored in order, skipping ineligible providers.
+- Supports persisted `codex_first`, `third_party_first`, and `manual` routing modes with named provider chains. Session stickiness pins a fallback provider until reset or the reported quota reset time.
+- Advances during an approved task only when the provider returns authoritative quota-exhaustion evidence. A retryable rate limit is retried on the same provider when `Retry-After` is available; authentication, security, and unknown failures stop for a fresh preflight.
+- Codex quota and usage status are read through the local `codex app-server` (`account/rateLimits/read` and `account/usage/read`) and retained in the local quota ledger.
 - Merges live provider catalogs with deliberately scored seed models where compatible model discovery is available.
 - Supports three switch-confirmation modes:
   - `always_ask` (`always` alias): require preflight approval for every route.
   - `paid_only`: authorize free and free-quota preflights automatically; paid and Puter user-pays routes require approval.
   - `automatic` (`never` alias): authorize every eligible preflight automatically while continuing to enforce local caps.
 - Permits high-quality escalation to premium specialist models when the quality score justifies the additional cost.
-- Forbids dynamic failover while Working is active; a failed locked route stops and requires a new preflight.
+- Keeps the prompt, token budget, consent, and capability gates locked while Working is active; the only permitted mid-work transition is quota-only fallback to the next provider in the preflight's named chain.
 - Stores route decisions, provider failures, tokens, latency, known cost, quota observations, and workflow evidence in local SQLite.
 - Disables seed models for providers whose first live discovery attempt fails, labels those providers experimental, and leaves configured-only providers explicitly unverified rather than treating them as failures.
 - Keeps secrets in `~/.local/state/lwa-mcp/lwa.env` and never returns them through MCP or dashboard APIs.
@@ -192,6 +195,23 @@ first configured key. `billing_api_key_env` is reserved for quota/billing
 probes. The same configuration works for OpenAI-compatible providers, and the
 existing single `api_key_env` configuration remains valid.
 
+### Provider routing controls
+
+The standalone CLI exposes the persisted routing policy without handling secret values:
+
+```bash
+./.venv/bin/lwa-router provider status
+./.venv/bin/lwa-router provider mode codex-first
+./.venv/bin/lwa-router provider mode third-party-first
+./.venv/bin/lwa-router provider use anthropic
+./.venv/bin/lwa-router provider auto
+```
+
+`provider status` reports the active provider/order, configured route chains,
+availability state, and known quota reset timestamps. The equivalent MCP
+controls are `set_routing_mode`, `use_provider`, `clear_provider_stickiness`,
+and `refresh_provider_quotas`.
+
 ## Install
 
 ```bash
@@ -321,8 +341,8 @@ prepare_task
 approve_preflight
 run_prepared_task
 route_task                 # preparation alias
-smart_complete             # preparation alias; never executes in v0.4.1
-confirm_and_run            # approval alias; never executes in v0.4.1
+smart_complete             # preparation alias; never executes in v0.4.2
+confirm_and_run            # approval alias; never executes in v0.4.2
 quick_response
 answer_query
 verify_work

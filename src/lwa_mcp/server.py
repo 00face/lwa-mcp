@@ -347,6 +347,29 @@ async def refresh_provider_quotas() -> str:
 
 
 @mcp.tool()
+def set_routing_mode(mode: str) -> str:
+    """Persist codex_first, third_party_first, or manual provider routing."""
+    return _json({"routing": get_service().set_routing_mode(mode), "status": get_service().routing_status()})
+
+
+@mcp.tool()
+def use_provider(provider: str) -> str:
+    """Persist a manual provider selection and switch routing to manual mode."""
+    svc = get_service()
+    svc.set_manual_provider(provider)
+    svc.set_routing_mode("manual")
+    return _json({"status": svc.routing_status()})
+
+
+@mcp.tool()
+def clear_provider_stickiness() -> str:
+    """Reset the session provider pin created by a quota fallback."""
+    svc = get_service()
+    svc.router.clear_sticky_provider(svc.session_id)
+    return _json({"status": svc.routing_status()})
+
+
+@mcp.tool()
 def router_status() -> str:
     """Return local usage, latest quota headers, provider health, and consent mode."""
     return _json(get_service().status())

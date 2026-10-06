@@ -1,0 +1,7 @@
+interface:
+  display_name: "Lwa Verify"
+  short_description: "Verify work through governed Lwa routing"
+  default_prompt: "Use $lwa-verify to verify this material and criteria:"
+
+policy:
+  allow_implicit_invocation: false
