@@ -18,14 +18,14 @@ def main() -> int:
     try:
         if args.mode == "test-sleep":
             subprocess.run(
-                [sys.executable, "-c", "import time; time.sleep(2)"],
+                ["python3", "-c", "import time; time.sleep(2)"],
                 cwd=args.root,
                 timeout=args.timeout,
                 check=False,
             )
         else:
             subprocess.run(
-                [sys.executable, "-m", "lwa_mcp.server"],
+                ["python3", "-m", "lwa_mcp.server"],
                 cwd=args.root,
                 timeout=args.timeout,
                 check=False,
