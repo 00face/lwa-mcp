@@ -221,9 +221,12 @@ cd lwa-mcp
 
 The installer accepts `--no-key-wizard` for unattended setup, `--with-dev` to
 include test/development dependencies, `--upgrade-pip` when pip itself should
-be refreshed, and `--venv PATH` to place the environment elsewhere. On
-Windows, run `scripts\\install.bat` with the same options. After installation,
-activate the environment and use the launch commands:
+be refreshed, and `--venv PATH` to place the environment elsewhere. It creates
+`~/.local/bin/lwa-router` and adds `~/.local/bin` idempotently to the detected
+shell startup file (`.zshrc`, `.bashrc`, or `.profile`). Open a new shell after
+installation, or source that file in the current shell. On Windows, run
+`scripts\\install.bat` with the same options. After installation, activate the
+environment and use the launch commands:
 
 ```bash
 source .venv/bin/activate

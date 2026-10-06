@@ -15,6 +15,8 @@ def test_linux_installer_has_valid_shell_syntax_and_help():
     assert "--no-user-bin" in result.stdout
     assert "USER_BIN_DIR" in script.read_text(encoding="utf-8")
     assert "ln -sfn" in script.read_text(encoding="utf-8")
+    assert "ensure_user_bin_on_path" in script.read_text(encoding="utf-8")
+    assert ".zshrc" in script.read_text(encoding="utf-8")
 
 
 def test_linux_installer_and_runtime_launchers_are_executable():
