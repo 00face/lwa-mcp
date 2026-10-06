@@ -16,6 +16,11 @@ preflight, model routing, consensus, verification, SITREPs, planning, prompt
 optimization, conversation compression, document editing, persistent tool
 library search/read/run, workflow observation, and status/telemetry tools.
 
+Consensus preparation is on by default for ordinary prompt tools. Toggle the
+current session with `!lwa c on`, `$lwa c on`, `!lwa c off`, or `$lwa c off`
+(mapped to the `set_consensus_mode` MCP control). Image and video generation
+remain capability-specific single-route tasks.
+
 Text routing accepts `reasoning_effort=instant|medium|high` in addition to the
 existing Lwa `quality` preference. The effort is locked during preflight and is
 translated only by models that advertise support; `instant` maps to the

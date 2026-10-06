@@ -18,7 +18,14 @@ class ParsedCommand:
     controls: dict[str, str | int]
 
 
-_MODES = {"!e": "direct", "!$": "skill", "!d": "delegated", "!c": "consensus"}
+_MODES = {
+    "!e": "direct",
+    "!$": "skill",
+    "!d": "delegated",
+    "!c": "consensus",
+    "!lwa": "skill",
+    "$lwa": "skill",
+}
 _DEFAULTS = {"analysis_depth": "medium", "response_depth": "medium", "task_turns": 1,
              "provider_count": 1, "consensus_rounds": 1}
 _MAX = {"task_turns": 20, "provider_count": 8, "consensus_rounds": 8}
@@ -37,6 +44,11 @@ def parse_command(text: str) -> ParsedCommand:
         raise PrefixError("nested command prefix")
     command_tokens: list[str] = []
     controls = dict(_DEFAULTS)
+    if prefix in {"!lwa", "$lwa"} and tokens and tokens[0] == "c":
+        if len(tokens) != 2 or tokens[1] not in {"on", "off"}:
+            raise PrefixError("consensus toggle must be on or off")
+        controls["consensus"] = tokens[1]
+        return ParsedCommand(_MODES[prefix], "consensus", original, controls)
     for token in tokens:
         if token.startswith("--"):
             try:
