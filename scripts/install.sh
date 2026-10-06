@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV="${ROOT_DIR}/.venv"
 USER_BIN_DIR="${HOME}/.local/bin"
+SHELL_RC=""
 NO_KEY_WIZARD=0
 NO_USER_BIN=0
 WITH_DEV=0
@@ -17,6 +18,28 @@ Usage: scripts/install.sh [options]
   --no-user-bin    Do not create user-bin launcher links
   --upgrade-pip    Upgrade pip before installing
 EOF
+}
+
+select_shell_rc() {
+  case "${SHELL##*/}" in
+    zsh) SHELL_RC="${ZDOTDIR:-${HOME}}/.zshrc" ;;
+    bash) SHELL_RC="${HOME}/.bashrc" ;;
+    *) SHELL_RC="${HOME}/.profile" ;;
+  esac
+}
+
+ensure_user_bin_on_path() {
+  select_shell_rc
+  local path_line='case ":${PATH:-}:" in *:"${HOME}/.local/bin":*) ;; *) export PATH="${HOME}/.local/bin${PATH:+:$PATH}" ;; esac'
+  touch "$SHELL_RC"
+  if ! grep -Fqx "$path_line" "$SHELL_RC"; then
+    {
+      printf '\n# Lwa MCP user-local launchers\n'
+      printf '%s\n' "$path_line"
+    } >> "$SHELL_RC"
+  fi
+  export PATH="${USER_BIN_DIR}${PATH:+:$PATH}"
+  echo "Added ${USER_BIN_DIR} to PATH for future ${SHELL##*/} shells via ${SHELL_RC}."
 }
 
 UPGRADE_PIP=0
@@ -44,5 +67,6 @@ if (( ! NO_USER_BIN )); then
   mkdir -p "$USER_BIN_DIR"
   ln -sfn "$VENV/bin/lwa" "$USER_BIN_DIR/lwa"
   ln -sfn "$VENV/bin/lwa-router" "$USER_BIN_DIR/lwa-router"
+  ensure_user_bin_on_path
 fi
 if (( ! NO_KEY_WIZARD )); then "$VENV/bin/lwa-router" init; else "$VENV/bin/lwa-router" init --no-key-wizard; fi
