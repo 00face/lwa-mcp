@@ -159,6 +159,7 @@ def rank_model_tiers(models: list[Any], providers: dict[str, Any], limit: int = 
 class RouterService:
     def __init__(self, config: LoadedConfig | None = None):
         self.session_id = uuid4().hex
+        self.consensus_default = True
         self.config = config or load_config()
         try:
             self._initialize_components(self.config)
@@ -309,6 +310,18 @@ class RouterService:
 
     async def prepare_task(self, request: RouteRequest) -> dict[str, Any]:
         """Lock prompt, token budget, consent state, and model before provider work."""
+        if request.metadata.get("consensus_default") and request.task not in {
+            TaskKind.CONSENSUS,
+            TaskKind.IMAGE_GENERATION,
+            TaskKind.VIDEO_GENERATION,
+        }:
+            return await self.prepare_consensus(
+                request.prompt,
+                quality=request.quality,
+                allow_paid=request.allow_paid,
+                excluded_providers=request.excluded_providers,
+                reasoning_effort=request.reasoning_effort,
+            )
         # Preflight must remain deterministic and cheap. Live model discovery is
         # an explicit operator action through refresh_model_catalog(); seed and
         # previously refreshed candidates are sufficient for route selection.
@@ -1013,6 +1026,11 @@ class RouterService:
         parsed = parse_consent_mode(mode)
         self.router.set_consent_mode(parsed)
         return parsed.value
+
+    def set_consensus_default(self, enabled: bool) -> bool:
+        """Toggle consensus preparation for subsequent session prompts."""
+        self.consensus_default = bool(enabled)
+        return self.consensus_default
 
     def set_routing_mode(self, mode: str | RoutingMode) -> str:
         return self.router.set_routing_mode(mode).value

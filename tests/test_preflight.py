@@ -270,6 +270,22 @@ async def test_prepare_task_rejects_forbidden_pipeline_metadata_before_routing(t
 
 
 @pytest.mark.asyncio
+async def test_default_prompt_policy_prepares_consensus(tmp_path):
+    service = RouterService(make_config(tmp_path))
+    request = service.build_request(
+        TaskKind.QUERY,
+        "Use the default consensus doctrine",
+        metadata={"consensus_default": True},
+    )
+
+    prepared = await service.prepare_task(request)
+
+    assert prepared["preflight"]["mode"] == "consensus"
+    assert prepared["preflight"]["locks"]["consensus_plan"] is True
+    assert any(route["role"] == "consensus_voter" for route in prepared["preflight"]["routes"])
+
+
+@pytest.mark.asyncio
 async def test_confirmation_happens_before_work(tmp_path, monkeypatch):
     service = RouterService(make_config(tmp_path, ConsentMode.ALWAYS))
     await disable_refresh(service, monkeypatch)

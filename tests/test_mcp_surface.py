@@ -42,6 +42,7 @@ def test_mcp_exposes_tools_resources_and_prompts():
         "model_tiers",
         "generate_video",
         "syntax_contract_resource",
+        "set_consensus_mode",
     } <= tools
 
 

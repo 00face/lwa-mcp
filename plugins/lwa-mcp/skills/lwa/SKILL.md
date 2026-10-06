@@ -33,6 +33,12 @@ An offline provider status of `ready` means configured for a seed route; inspect
 Use `set_routing_mode`, `use_provider`, `clear_provider_stickiness`, and
 `refresh_provider_quotas` to make routing intent explicit and auditable.
 
+Consensus is on by default for prompt preparation. Toggle it for the current
+session with `!lwa c on`, `$lwa c on`, `!lwa c off`, or `$lwa c off`; these map
+to the session-scoped `set_consensus_mode` MCP control. Turning consensus off
+selects one locked provider route while retaining the same preflight and
+approval gates.
+
 ## Restrictions
 
 Keep provider keys out of prompts, reports, logs, and generated documentation.

@@ -37,6 +37,16 @@ def get_service() -> RouterService:
     return service
 
 
+async def _prepare_default_prompt(svc: RouterService, request):
+    """Apply the default all-prompts consensus doctrine before preflight."""
+    if not svc.consensus_default:
+        return await svc.prepare_task(request)
+    request = request.model_copy(
+        update={"metadata": {**request.metadata, "consensus_default": True}}
+    )
+    return await svc.prepare_task(request)
+
+
 @mcp.resource("lwa://status")
 def status_resource() -> str:
     """Read-only operational status without credentials or raw prompts."""
@@ -94,7 +104,7 @@ async def route_task(
         excluded_providers=excluded_providers,
         tool_name="route_task",
     )
-    return _json(await svc.prepare_task(request), response_detail)
+    return _json(await _prepare_default_prompt(svc, request), response_detail)
 
 
 @mcp.tool()
@@ -124,7 +134,7 @@ async def prepare_task(
         excluded_providers=excluded_providers,
         tool_name="prepare_task",
     )
-    return _json(await svc.prepare_task(request), response_detail)
+    return _json(await _prepare_default_prompt(svc, request), response_detail)
 
 
 @mcp.tool()
@@ -189,7 +199,7 @@ async def smart_complete(
             "workflow_tags": workflow_tags or [],
         },
     )
-    return _json(await svc.prepare_task(request), response_detail)
+    return _json(await _prepare_default_prompt(svc, request), response_detail)
 
 
 @mcp.tool()
@@ -203,7 +213,7 @@ async def quick_response(prompt: str, quality: str = "economy", reasoning_effort
     """Prepare a low-latency auxiliary response; execution requires run_prepared_task."""
     svc = get_service()
     request = svc.build_request(TaskKind.QUICK_RESPONSE, prompt, quality=quality, reasoning_effort=reasoning_effort, max_output_tokens=700, tool_name="quick_response")
-    return _json(await svc.prepare_task(request))
+    return _json(await _prepare_default_prompt(svc, request))
 
 
 @mcp.tool()
@@ -211,7 +221,7 @@ async def answer_query(prompt: str, quality: str = "balanced", reasoning_effort:
     """Prepare a routed query; execution requires run_prepared_task."""
     svc = get_service()
     request = svc.build_request(TaskKind.QUERY, prompt, quality=quality, reasoning_effort=reasoning_effort, max_output_tokens=1400, tool_name="answer_query")
-    return _json(await svc.prepare_task(request))
+    return _json(await _prepare_default_prompt(svc, request))
 
 
 @mcp.tool()
@@ -219,7 +229,7 @@ async def verify_work(material: str, quality: str = "balanced", reasoning_effort
     """Prepare a verification route; execution requires run_prepared_task."""
     svc = get_service()
     request = svc.build_request(TaskKind.VERIFICATION, material, quality=quality, reasoning_effort=reasoning_effort, max_output_tokens=1800, tool_name="verify_work")
-    return _json(await svc.prepare_task(request))
+    return _json(await _prepare_default_prompt(svc, request))
 
 
 @mcp.tool()
@@ -242,7 +252,7 @@ async def generate_image(
         metadata={"aspect_ratio": aspect_ratio, "output_format": output_format},
         tool_name="generate_image",
     )
-    return _json(await svc.prepare_task(request))
+    return _json(await _prepare_default_prompt(svc, request))
 
 
 @mcp.tool()
@@ -265,7 +275,7 @@ async def generate_video(
         metadata={"seconds": seconds, "size": size},
         tool_name="generate_video",
     )
-    return _json(await svc.prepare_task(request))
+    return _json(await _prepare_default_prompt(svc, request))
 
 
 @mcp.tool()
@@ -273,7 +283,7 @@ async def compress_conversation(conversation: str, quality: str = "economy", rea
     """Prepare conversation compression while preserving required context."""
     svc = get_service()
     request = svc.build_request(TaskKind.CONVERSATION_COMPRESSION, conversation, quality=quality, reasoning_effort=reasoning_effort, tool_name="compress_conversation")
-    return _json(await svc.prepare_task(request))
+    return _json(await _prepare_default_prompt(svc, request))
 
 
 @mcp.tool()
@@ -281,7 +291,7 @@ async def optimize_prompt(prompt: str, quality: str = "economy", reasoning_effor
     """Prepare token optimization while preserving binding requirements and literals."""
     svc = get_service()
     request = svc.build_request(TaskKind.TOKEN_OPTIMIZATION, prompt, quality=quality, reasoning_effort=reasoning_effort, tool_name="optimize_prompt")
-    return _json(await svc.prepare_task(request))
+    return _json(await _prepare_default_prompt(svc, request))
 
 
 @mcp.tool()
@@ -290,7 +300,7 @@ async def edit_document(document: str, instructions: str, quality: str = "balanc
     svc = get_service()
     prompt = f"EDITING INSTRUCTIONS:\n{instructions}\n\nDOCUMENT:\n{document}"
     request = svc.build_request(TaskKind.DOCUMENT_EDITING, prompt, quality=quality, reasoning_effort=reasoning_effort, max_output_tokens=5000, tool_name="edit_document")
-    return _json(await svc.prepare_task(request))
+    return _json(await _prepare_default_prompt(svc, request))
 
 
 @mcp.tool()
@@ -298,7 +308,7 @@ async def write_sitrep(project_material: str, quality: str = "balanced", reasoni
     """Prepare an evidence-bound SITREP route before Working begins."""
     svc = get_service()
     request = svc.build_request(TaskKind.SITREP, project_material, quality=quality, reasoning_effort=reasoning_effort, max_output_tokens=2400, tool_name="write_sitrep")
-    return _json(await svc.prepare_task(request))
+    return _json(await _prepare_default_prompt(svc, request))
 
 
 @mcp.tool()
@@ -306,7 +316,7 @@ async def plan_work(objective: str, quality: str = "balanced", reasoning_effort:
     """Prepare project planning with its prompt, budget, and model locked."""
     svc = get_service()
     request = svc.build_request(TaskKind.PLANNING, objective, quality=quality, reasoning_effort=reasoning_effort, max_output_tokens=2600, tool_name="plan_work")
-    return _json(await svc.prepare_task(request))
+    return _json(await _prepare_default_prompt(svc, request))
 
 
 @mcp.tool()
@@ -331,6 +341,14 @@ def set_switch_confirmation(mode: str) -> str:
     """Set model-switch prompting: always_ask, paid_only, or automatic."""
     value = get_service().set_consent_mode(parse_consent_mode(mode))
     return _json({"consent_mode": value})
+
+
+@mcp.tool()
+def set_consensus_mode(enabled: bool) -> str:
+    """Toggle the session default: consensus on or single-route preparation."""
+    svc = get_service()
+    value = svc.set_consensus_default(enabled)
+    return _json({"consensus_default": value, "scope": "session"})
 
 
 @mcp.tool()
