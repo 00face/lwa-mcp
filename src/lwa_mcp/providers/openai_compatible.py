@@ -9,7 +9,7 @@ import httpx
 from ..contracts import candidate_supported_parameters
 from ..models import BillingClass, Capability, CompletionResult, ModelCandidate, RouteRequest
 from ..syntax import api_reasoning_effort
-from .base import ProviderAdapter, ProviderError, redact_error
+from .base import ProviderAdapter, ProviderError, redact_error, security_denial
 
 
 def _first_number(value: Any) -> float | None:
@@ -115,7 +115,23 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         latency_ms = int((time.perf_counter() - started) * 1000)
         if response.status_code >= 400:
             body = redact_error(response.text[:1000])
-            raise ProviderError(f"{self.config.name} HTTP {response.status_code}: {body}")
+            lower_body = body.lower()
+            quota = response.status_code == 402 or any(
+                marker in lower_body for marker in ("quota", "insufficient credit", "monthly limit")
+            )
+            retry_after = None
+            if response.status_code == 429:
+                try:
+                    retry_after = float(response.headers.get("retry-after", ""))
+                except ValueError:
+                    retry_after = None
+            raise ProviderError(
+                f"{self.config.name} HTTP {response.status_code}: {body}",
+                status_code=response.status_code,
+                quota_exhausted=quota,
+                security_denied=security_denial(body),
+                retry_after_seconds=retry_after,
+            )
         data = self.decode_json(response, f"{self.config.name} completion")
         choices = data.get("choices") or []
         if not choices:

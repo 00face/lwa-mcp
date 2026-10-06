@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "lwa": {
+      "command": "/home/face/Documents/Documents/code/lwa-mcp/scripts/codex-mcp-entrypoint.sh"
+    }
+  }
+}

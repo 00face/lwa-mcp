@@ -4,7 +4,7 @@ import asyncio
 import socket
 import sqlite3
 import tempfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from os import getenv
 from pathlib import Path
 from typing import Any
@@ -35,9 +35,16 @@ from .patterns import PatternDetector
 from .pipeline_manager import PipelineManager
 from .preflight import PreflightStore
 from .prompts import DEFAULT_PROMPTS
+from .provider_policy import (
+    Availability,
+    ProviderState,
+    RoutingMode,
+    classify_exception,
+    classify_provider_failure,
+)
 from .providers import build_adapter
-from .providers.base import redact_error
-from .routing import Router
+from .providers.base import ProviderError, redact_error
+from .routing import NoRouteError, Router
 from .syntax import (
     parse_task_kind,
     validate_public_prompt_template,
@@ -67,6 +74,22 @@ def _bounded_text(value: str, limit: int) -> str:
         + f"\n\n[content compacted by LWA: {omitted} characters omitted]\n\n"
         + value[-tail:]
     )
+
+
+def _parse_reset_at(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value.astimezone(UTC)
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value, UTC)
+        except (OverflowError, OSError, ValueError):
+            return None
+    if isinstance(value, str) and value:
+        try:
+            return datetime.fromisoformat(value).astimezone(UTC)
+        except ValueError:
+            return None
+    return None
 
 
 def _compact_consensus_transcript(reviews: list[Any], failures: list[dict[str, Any]], limit: int) -> str:
@@ -439,12 +462,16 @@ class RouterService:
             if prepared.mode == "consensus":
                 result = await self._execute_prepared_consensus(prepared)
             else:
-                completion = await self.execute(prepared.requests[0], prepared.decisions[0])
+                completion, final_decision, fallback_events = await self._execute_with_quota_fallback(
+                    prepared.requests[0], prepared.decisions[0]
+                )
                 result = {
                     "status": "completed",
-                    "decision": prepared.decisions[0].model_dump(mode="json"),
+                    "decision": final_decision.model_dump(mode="json"),
                     "result": completion.model_dump(mode="json"),
                 }
+                if fallback_events:
+                    result["quota_fallback"] = fallback_events
         except Exception as exc:  # noqa: BLE001
             self.db.update_preflight_status(summary.plan_id, "repreflight_required")
             return {
@@ -452,8 +479,8 @@ class RouterService:
                 "phase": "work_stopped",
                 "working_started_at": started_at,
                 "message": (
-                    "The locked route failed. Working stopped; a new preflight is required "
-                    "before selecting or switching to another model."
+                    "The route failed without authoritative quota-exhaustion evidence. "
+                    "Working stopped; a new preflight is required before switching models."
                 ),
                 "error": redact_error(str(exc)),
                 "preflight": summary.model_dump(mode="json"),
@@ -486,6 +513,77 @@ class RouterService:
         if guidance:
             completed["next_tier_guidance"] = guidance
         return completed
+
+    async def _execute_with_quota_fallback(
+        self, request: RouteRequest, decision: RouteDecision
+    ) -> tuple[CompletionResult, RouteDecision, list[dict[str, Any]]]:
+        """Execute a locked route and advance only on quota exhaustion.
+
+        Prompt, token budget, consent, and provider policy remain fixed. The
+        only permitted mid-work transition is an explicitly classified quota
+        exhaustion to the next eligible provider in the configured chain.
+        """
+        current_request = request
+        current_decision = decision
+        failed: list[str] = []
+        events: list[dict[str, Any]] = []
+        rate_limit_retries = 0
+        while True:
+            try:
+                return await self.execute(current_request, current_decision), current_decision, events
+            except ProviderError as exc:
+                state = ProviderState(
+                    current_decision.candidate.provider,
+                    classify_exception(exc),
+                    retry_at=(
+                        datetime.now(UTC) + timedelta(seconds=float(exc.retry_after_seconds))
+                        if getattr(exc, "retry_after_seconds", None) is not None
+                        else None
+                    ),
+                    reset_at=_parse_reset_at(getattr(exc, "reset_at", None)),
+                    detail=str(exc),
+                )
+                if (
+                    state.availability is Availability.TEMPORARY_RATE_LIMIT
+                    and rate_limit_retries == 0
+                    and getattr(exc, "retry_after_seconds", None) is not None
+                ):
+                    rate_limit_retries += 1
+                    await asyncio.sleep(min(60.0, max(0.0, float(exc.retry_after_seconds))))
+                    continue
+                if state.availability is Availability.QUOTA_EXHAUSTED:
+                    failed.append(state.provider)
+                    order = current_request.preferred_providers or self.router.routing_policy().provider_order(
+                        session_id=current_request.metadata.get("session_id")
+                    )
+                    next_request = current_request.model_copy(
+                        update={
+                            "preferred_providers": order,
+                            "excluded_providers": list(dict.fromkeys([*current_request.excluded_providers, *failed])),
+                        }
+                    )
+                    try:
+                        next_decision = self.router.decide(next_request)
+                    except NoRouteError as next_exc:
+                        raise exc from next_exc
+                    events.append(
+                        {
+                            "from_provider": state.provider,
+                            "to_provider": next_decision.candidate.provider,
+                            "reason": state.availability.value,
+                            "reset_at": state.reset_at.isoformat() if state.reset_at else None,
+                        }
+                    )
+                    self.router.stick_provider(
+                        next_decision.candidate.provider,
+                        reset_at=state.reset_at,
+                        session_id=current_request.metadata.get("session_id"),
+                    )
+                    current_request = next_request
+                    current_decision = next_decision
+                    rate_limit_retries = 0
+                    continue
+                raise
 
     def _tier_guidance_enabled(self) -> bool:
         stored = self.db.get_setting("post_response_tier_guidance")
@@ -843,18 +941,46 @@ class RouterService:
 
         async def one(name: str) -> tuple[str, dict[str, Any]]:
             cfg = self.config.settings.providers[name]
-            if not cfg.enabled or not cfg.quota_path:
+            if not cfg.enabled or (not cfg.quota_path and cfg.adapter != "codex"):
                 return name, {"status": "not_supported"}
             key_envs = cfg.credential_env_names(billing=True) or cfg.credential_env_names()
             if key_envs and not any(os.getenv(key, "") for key in key_envs):
                 return name, {"status": "not_configured", "missing": key_envs}
             try:
-                payload = await build_adapter(cfg).fetch_quota()
+                adapter = build_adapter(cfg)
+                payload = await adapter.fetch_quota()
                 if payload is None:
                     return name, {"status": "not_supported"}
+                if name == "codex" and hasattr(adapter, "fetch_usage"):
+                    payload["usage"] = await adapter.fetch_usage()
                 self.db.record_quota_snapshot(name, payload)
-                return name, {"status": "ok", "values": payload}
+                state = classify_provider_failure(
+                    rate_limit_reached_type=str(
+                        payload.get("rateLimitReachedType") or payload.get("rate_limit_reached_type") or ""
+                    ),
+                    quota_exhausted=payload.get("quota_exhausted") is True,
+                )
+                availability = state.value if state is not Availability.UNAVAILABLE else Availability.AVAILABLE.value
+                health = self.catalog.health.get(name)
+                if health is not None:
+                    health.availability = availability
+                    health.retry_at = None
+                    health.reset_at = _parse_reset_at(payload.get("reset_at"))
+                    health.detail = f"quota snapshot: {availability}"
+                return name, {"status": "ok", "availability": availability, "values": payload}
             except Exception as exc:  # noqa: BLE001
+                health = self.catalog.health.get(name)
+                if health is not None:
+                    state = classify_exception(exc)
+                    health.availability = state.value
+                    retry_after = getattr(exc, "retry_after_seconds", None)
+                    health.retry_at = (
+                        datetime.now(UTC) + timedelta(seconds=float(retry_after))
+                        if retry_after is not None
+                        else None
+                    )
+                    health.healthy = False
+                    health.detail = redact_error(str(exc))
                 return name, {"status": "error", "error": redact_error(str(exc))}
 
         rows = await asyncio.gather(*(one(name) for name in self.config.settings.providers))
@@ -888,12 +1014,50 @@ class RouterService:
         self.router.set_consent_mode(parsed)
         return parsed.value
 
+    def set_routing_mode(self, mode: str | RoutingMode) -> str:
+        return self.router.set_routing_mode(mode).value
+
+    def set_manual_provider(self, provider: str | None) -> str | None:
+        if provider is not None and provider not in self.config.settings.providers and provider != "codex":
+            raise ValueError(f"Unknown provider: {provider}")
+        self.router.set_manual_provider(provider)
+        return provider
+
+    def routing_status(self) -> dict[str, Any]:
+        policy = self.router.routing_policy()
+        order = policy.provider_order(session_id=self.session_id)
+        rows = {row["name"]: row for row in self.providers_json()}
+        active = order[0] if order else None
+        return {
+            "mode": policy.mode.value,
+            "manual_provider": policy.manual_provider,
+            "sticky_provider": policy.sticky_for(self.session_id),
+            "sticky_until": (
+                policy.sticky_until_for(self.session_id).isoformat()
+                if policy.sticky_until_for(self.session_id)
+                else None
+            ),
+            "session_sticky_count": len(policy.session_sticky),
+            "active_provider": active,
+            "routes": policy.routes,
+            "active_order": [
+                {"provider": name, "configured": rows.get(name, {}).get("configured", False),
+                 "enabled": rows.get(name, {}).get("enabled", name == "codex"),
+                 "availability": rows.get(name, {}).get("availability", Availability.AVAILABLE.value),
+                 "retry_at": rows.get(name, {}).get("retry_at"),
+                 "reset_at": rows.get(name, {}).get("reset_at")}
+                for name in order
+            ],
+            "providers": rows,
+        }
+
     def status(self) -> dict[str, Any]:
         summary = self.db.dashboard_summary()
         dashboard_host = self.config.settings.dashboard_host
         dashboard_port = self.config.settings.dashboard_port
         return {
             "consent_mode": self.router.consent_mode().value,
+            "routing": self.routing_status(),
             "catalog_models": len(self.catalog.all()),
             "health": [item.model_dump(mode="json") for item in self.catalog.health.values()],
             "pipelines": self.pipeline_manager.status(),
@@ -962,6 +1126,21 @@ class RouterService:
                     "daily_request_cap": cfg.daily_request_cap,
                     "disabled_reason": cfg.disabled_reason,
                     "caps": self.db.provider_caps(name, cfg.daily_request_cap, cfg.monthly_usd_cap),
+                    "availability": (
+                        self.catalog.health[name].availability
+                        if name in self.catalog.health
+                        else Availability.AVAILABLE.value
+                    ),
+                    "retry_at": (
+                        self.catalog.health[name].retry_at.isoformat()
+                        if name in self.catalog.health and self.catalog.health[name].retry_at
+                        else None
+                    ),
+                    "reset_at": (
+                        self.catalog.health[name].reset_at.isoformat()
+                        if name in self.catalog.health and self.catalog.health[name].reset_at
+                        else None
+                    ),
                 }
             )
         return rows

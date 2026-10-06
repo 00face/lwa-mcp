@@ -106,8 +106,9 @@ class ProviderConfig(BaseModel):
     name: str
     enabled: bool = True
     experimental: bool = False
-    adapter: Literal["openai", "openai_media", "gemini", "puter", "replicate", "stability"] = "openai"
+    adapter: Literal["openai", "openai_media", "gemini", "puter", "replicate", "stability", "codex", "anthropic", "bedrock"] = "openai"
     base_url: str | None = None
+    region: str | None = None
     api_key_env: str | None = None
     api_key_envs: list[str] = Field(default_factory=list)
     billing_api_key_env: str | None = None
@@ -259,6 +260,9 @@ class ProviderHealth(BaseModel):
     enabled: bool
     experimental: bool = False
     healthy: bool | None = None
+    availability: str = "available"
+    retry_at: datetime | None = None
+    reset_at: datetime | None = None
     detail: str = ""
     checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

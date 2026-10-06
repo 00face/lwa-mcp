@@ -53,6 +53,7 @@ def test_visible_wizard_confirms_and_saves(tmp_path, monkeypatch):
     codex_home.mkdir()
     monkeypatch.setattr(credentials, "STATE_DIR", state_dir)
     monkeypatch.setenv("CODEX_HOME", str(codex_home))
+    monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.delenv("OPENROUTER_KEY", raising=False)
 

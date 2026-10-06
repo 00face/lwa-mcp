@@ -61,7 +61,7 @@ def test_handshake_report_is_compact_and_provider_free(tmp_path):
 def test_handshake_smoke_timeout_reports_bounded_failure_metadata(tmp_path):
     smoke_script = Path(__file__).parents[1] / "scripts" / "handshake" / "mcp_handshake_smoke.py"
     result = subprocess.run(
-        [sys.executable, str(smoke_script), "--root", str(tmp_path), "--command", "sh -c 'sleep 2'", "--timeout", "0.01"],
+        [sys.executable, str(smoke_script), "--root", str(tmp_path), "--mode", "test-sleep", "--timeout", "0.01"],
         capture_output=True,
         text=True,
         check=False,

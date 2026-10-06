@@ -1,0 +1,7 @@
+interface:
+  display_name: "Lwa Doctor"
+  short_description: "Diagnose Lwa MCP safely"
+  default_prompt: "Use $lwa-doctor to diagnose Lwa MCP:"
+
+policy:
+  allow_implicit_invocation: false

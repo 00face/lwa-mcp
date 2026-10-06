@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Plan a selective release candidate without mutating the worktree."""
 from __future__ import annotations
-import json
+
 import argparse
+import json
 import subprocess
 from pathlib import Path
 

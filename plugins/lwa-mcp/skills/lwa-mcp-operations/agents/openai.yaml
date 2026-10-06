@@ -1,0 +1,7 @@
+interface:
+  display_name: "Lwa MCP Operations"
+  short_description: "Route governed tasks through Lwa MCP"
+  default_prompt: "Use $lwa to prepare and route this task through Lwa MCP:"
+
+policy:
+  allow_implicit_invocation: false

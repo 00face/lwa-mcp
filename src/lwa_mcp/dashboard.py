@@ -17,7 +17,7 @@ from .prompt_finalizer import finalize_prompt
 from .service import RouterService
 from .terminal_protocol import detect_terminal_capabilities
 
-app = FastAPI(title="Lwa MCP Dashboard", version="0.4.1")
+app = FastAPI(title="Lwa MCP Dashboard", version="0.4.2")
 service: RouterService | None = None
 codex_broker = CodexSessionBroker(max_sessions=8)
 static_dir = files("lwa_mcp").joinpath("static")

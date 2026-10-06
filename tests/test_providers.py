@@ -415,7 +415,7 @@ def test_default_provider_matrix_covers_required_pipelines():
     )
     providers = data["providers"]
     required = {
-        "gemini", "openai", "openrouter", "groq", "mistral", "cloudflare", "siliconflow", "venice",
+        "codex", "anthropic", "bedrock", "gemini", "openai", "openrouter", "groq", "mistral", "cloudflare", "siliconflow", "venice",
         "pollinations", "cohere", "replicate", "stability", "nvidia", "zai",
         "aion", "zenmux", "cerebras", "blackbox", "puter",
     }
@@ -432,5 +432,5 @@ def test_all_configured_provider_adapters_construct_offline():
         build_adapter(ProviderConfig.model_validate({"name": name, **spec}))
         for name, spec in providers.items()
     ]
-    assert len(adapters) == 19
+    assert len(adapters) == 22
     assert {adapter.config.name for adapter in adapters} == set(providers)

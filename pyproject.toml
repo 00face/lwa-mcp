@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lwa-mcp"
-version = "0.4.1"
+version = "0.4.2"
 description = "Local-first model router, workflow pattern detector, persistent tool library, consent gate, quota ledger, and dashboard."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,6 +23,7 @@ dependencies = [
 
 [project.optional-dependencies]
 media = ["replicate>=1.0,<2"]
+bedrock = ["boto3>=1.35,<2"]
 dev = ["pytest>=8.2,<9", "pytest-asyncio>=0.23,<1", "ruff>=0.6,<1"]
 
 [project.scripts]

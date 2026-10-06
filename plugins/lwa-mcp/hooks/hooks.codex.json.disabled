@@ -1,0 +1,18 @@
+{
+  "description": "Opt-in bounded Lwa PostToolUse feedback replacement.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"/home/face/Documents/Documents/code/lwa-mcp/scripts/compress-tool-output-feedback.py\"",
+            "timeout": 5,
+            "statusMessage": "Compressing noisy tool output"
+          }
+        ]
+      }
+    ]
+  }
+}

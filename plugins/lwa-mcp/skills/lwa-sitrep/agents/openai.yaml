@@ -1,0 +1,7 @@
+interface:
+  display_name: "Lwa SITREP"
+  short_description: "Write an evidence-backed project SITREP"
+  default_prompt: "Use $lwa-sitrep to report the verified project state:"
+
+policy:
+  allow_implicit_invocation: false

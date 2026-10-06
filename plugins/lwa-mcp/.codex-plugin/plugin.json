@@ -1,0 +1,32 @@
+{
+  "name": "lwa-mcp",
+  "version": "0.4.2+codex.20261006",
+  "description": "Local-first Lwa MCP router, consent gate, persistent tool library, workflow observer, and dashboard for every Codex conversation.",
+  "author": {
+    "name": "00FACE / Lwa MCP Project"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Lwa MCP",
+    "shortDescription": "Cross-conversation model routing and workflow tools.",
+    "longDescription": "Exposes the complete Lwa MCP server through Codex: governed model routing, consent and quota preflight, persistent tool-library discovery and execution, workflow observation, SITREPs, planning, consensus, verification, compression, prompt optimization, document editing, and the local dashboard.",
+    "developerName": "00FACE / Lwa MCP Project",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Model routing and preflight",
+      "Consent and quota enforcement",
+      "Persistent tool library",
+      "Workflow observation",
+      "SITREP and work planning",
+      "Consensus and verification",
+      "Prompt optimization and compression",
+      "Local dashboard"
+    ],
+    "defaultPrompt": [
+      "Prepare this task through Lwa MCP and show the locked route.",
+      "Use the persistent tool library when a matching workflow exists.",
+      "Create a SITREP and next work order with evidence."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

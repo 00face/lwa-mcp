@@ -300,6 +300,15 @@ def build_parser() -> argparse.ArgumentParser:
     telemetry.add_argument("--codex-model", help="Primary Codex model label for terminal display")
     telemetry.add_argument("--codex-reasoning", help="Primary Codex reasoning level for terminal display")
 
+    provider = sub.add_parser("provider", help="Control provider routing policy")
+    provider_sub = provider.add_subparsers(dest="provider_command", required=True)
+    provider_mode = provider_sub.add_parser("mode", help="Set automatic routing mode")
+    provider_mode.add_argument("mode", choices=["codex-first", "third-party-first", "manual"])
+    provider_use = provider_sub.add_parser("use", help="Pin routing to one provider")
+    provider_use.add_argument("provider")
+    provider_sub.add_parser("auto", help="Return to the configured automatic routing mode")
+    provider_sub.add_parser("status", help="Show routing mode, provider order, and configuration")
+
     task = sub.add_parser("run", help="Run one routed task")
     task.add_argument("task", choices=[item.value for item in TaskKind])
     task.add_argument("prompt")
@@ -372,6 +381,23 @@ def main() -> None:
         raise SystemExit(print_model_tiers(args.limit))
     elif args.command == "telemetry":
         raise SystemExit(print_telemetry(args.codex_model, args.codex_reasoning))
+    elif args.command == "provider":
+        svc = RouterService()
+        if args.provider_command == "mode":
+            mode = svc.set_routing_mode(args.mode)
+            if mode == "manual":
+                svc.set_manual_provider(None)
+            print(json.dumps(svc.routing_status(), indent=2))
+        elif args.provider_command == "use":
+            svc.set_manual_provider(args.provider)
+            svc.set_routing_mode("manual")
+            print(json.dumps(svc.routing_status(), indent=2))
+        elif args.provider_command == "auto":
+            svc.set_manual_provider(None)
+            svc.set_routing_mode(svc.config.settings.routing.mode)
+            print(json.dumps(svc.routing_status(), indent=2))
+        else:
+            print(json.dumps(svc.routing_status(), indent=2))
     elif args.command == "run":
         raise SystemExit(asyncio.run(run_task(args)))
     elif args.command == "library":

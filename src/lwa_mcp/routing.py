@@ -10,6 +10,7 @@ from .config import LoadedConfig
 from .contracts import candidate_supported_parameters
 from .db import UsageDB
 from .models import BillingClass, ConsentMode, ModelCandidate, RouteDecision, RouteRequest
+from .provider_policy import ProviderRoutingPolicy, RoutingMode
 
 BILLING_BONUS = {
     BillingClass.FREE: 35.0,
@@ -84,6 +85,16 @@ class Router:
         self.config = config
         self.catalog = catalog
         self.db = db
+        stored_mode = self.db.get_setting("routing_mode")
+        try:
+            mode = RoutingMode.parse(stored_mode) if stored_mode else config.settings.routing.mode
+        except ValueError:
+            mode = config.settings.routing.mode
+        self.policy = ProviderRoutingPolicy(
+            mode=mode,
+            routes=config.settings.routing.routes,
+            manual_provider=self.db.get_setting("manual_provider") or None,
+        )
 
     def consent_mode(self) -> ConsentMode:
         stored = self.db.get_setting("consent_mode")
@@ -92,11 +103,45 @@ class Router:
     def set_consent_mode(self, mode: ConsentMode) -> None:
         self.db.set_setting("consent_mode", mode.value)
 
+    def routing_policy(self) -> ProviderRoutingPolicy:
+        return self.policy
+
+    def set_routing_mode(self, mode: str | RoutingMode) -> RoutingMode:
+        parsed = RoutingMode.parse(mode)
+        self.db.set_setting("routing_mode", parsed.value)
+        self.policy = ProviderRoutingPolicy(
+            mode=parsed,
+            routes=self.config.settings.routing.routes,
+            manual_provider=self.db.get_setting("manual_provider") or None,
+        )
+        return parsed
+
+    def set_manual_provider(self, provider: str | None) -> None:
+        if provider:
+            self.db.set_setting("manual_provider", provider)
+        else:
+            self.db.set_setting("manual_provider", "")
+        self.policy.manual_provider = provider
+
+    def stick_provider(self, provider: str, *, reset_at=None, session_id: str | None = None) -> None:
+        self.policy.stick(provider, reset_at=reset_at, session_id=session_id)
+
+    def clear_sticky_provider(self, session_id: str | None = None) -> None:
+        self.policy.clear_sticky(session_id)
+
     def _rejection_reason(
         self, candidate: ModelCandidate, request: RouteRequest, input_tokens: int
     ) -> str | None:
         if not candidate.enabled:
             return candidate.disabled_reason or "model disabled"
+        policy = self.routing_policy()
+        if policy.mode is RoutingMode.MANUAL:
+            if not policy.manual_provider:
+                return "manual mode has no selected provider"
+            if candidate.provider != policy.manual_provider:
+                return "provider not selected in manual mode"
+        elif (sticky := policy.sticky_for(request.metadata.get("session_id"))) and candidate.provider != sticky:
+            return "provider pinned for this session"
         if candidate.provider in request.excluded_providers:
             return "provider excluded by request"
         if not request.required_capabilities.issubset(candidate.capabilities):
@@ -207,8 +252,18 @@ class Router:
             raise NoRouteError(request, rejections)
         # Explicit secondary keys make equal-score routing reproducible across
         # catalog refreshes and Python implementations.
+        policy = self.routing_policy()
+        provider_order = request.preferred_providers or policy.provider_order(
+            session_id=request.metadata.get("session_id")
+        )
+        if policy.mode is RoutingMode.MANUAL and not policy.manual_provider:
+            raise NoRouteError(
+                request,
+                [RouteRejection(candidate.provider, candidate.model, "manual mode has no selected provider")
+                 for candidate in self.catalog.all()],
+            )
         preferred_order: dict[str, int] = {}
-        for index, provider in enumerate(request.preferred_providers, start=1):
+        for index, provider in enumerate(provider_order, start=1):
             preferred_order.setdefault(provider, index)
         preferred_count = len(preferred_order)
         valid.sort(

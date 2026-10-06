@@ -6,6 +6,7 @@ from collections import defaultdict
 
 from .config import LoadedConfig
 from .models import ModelCandidate, ProviderHealth
+from .provider_policy import Availability
 from .providers import build_adapter
 from .providers.base import redact_error
 
@@ -47,6 +48,7 @@ class Catalog:
                     enabled=False,
                     experimental=provider.experimental,
                     healthy=None,
+                    availability=Availability.DISABLED.value,
                     detail=provider.disabled_reason or "disabled",
                 )
                 return []
@@ -57,6 +59,7 @@ class Catalog:
                     enabled=True,
                     experimental=provider.experimental,
                     healthy=None,
+                    availability=Availability.UNAVAILABLE.value,
                     detail=f"missing one of {', '.join(credential_envs)}",
                 )
                 return []
@@ -70,6 +73,7 @@ class Catalog:
                     enabled=True,
                     experimental=provider.experimental,
                     healthy=True,
+                    availability=Availability.AVAILABLE.value,
                     detail=(
                         f"{len(models)} live models"
                         + (" (bounded)" if len(models) == provider.catalog_model_limit else "")
@@ -100,6 +104,7 @@ class Catalog:
                     enabled=True,
                     experimental=True,
                     healthy=False,
+                    availability=Availability.UNAVAILABLE.value,
                     detail=detail,
                 )
                 return []
