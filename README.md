@@ -106,11 +106,18 @@ Lwa MCP uses a mandatory two-phase execution contract:
 
 1. `prepare_task`—or any specialized task tool—finalizes the prompt, estimates and locks the token budget, selects all model routes, evaluates quotas and consent, and records the plan. It makes no provider completion call.
 
-For ordinary MCP prompt tools, consensus preparation is enabled by default. The
-session can switch between consensus and single-route preparation with the
-`set_consensus_mode` tool; the companion command forms are `!lwa c on`,
-`$lwa c on`, `!lwa c off`, and `$lwa c off`. Image and video generation retain
-their capability-specific single route.
+Consensus preparation is adaptive by default: routine prompts use one route,
+while coding, verification, planning, and high-impact safety/change prompts use
+the free two-voter consensus quorum. The session can override that policy with
+the `set_consensus_mode` tool; the companion command forms are `!lwa c on`,
+`$lwa c on`, `!lwa c off`, and `$lwa c off`. Early voter agreement skips
+synthesis. Image and video generation retain their capability-specific route.
+
+`router.yaml` settings provide a 50,000-token default session ceiling (set it
+to `0` to disable), warning
+thresholds, economy output caps, and task-aware third-party-first routing for
+auxiliary work. Preflight reports the selected policy, quorum, and session
+budget before any provider call.
 2. When `working_may_begin` is `false`, call `approve_preflight` with the returned confirmation token. Approval still does not execute the task.
 3. Only after `working_may_begin` is `true` may the client display **Working...** and call `run_prepared_task` with the single-use plan token.
 

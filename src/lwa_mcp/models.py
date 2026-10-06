@@ -226,6 +226,7 @@ class PreflightSummary(BaseModel):
     call_id: str | None = None
     parent_call_id: str | None = None
     tool_name: str = "router_service"
+    consensus_policy: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     expires_at_epoch: float
 

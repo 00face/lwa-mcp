@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import socket
 import sqlite3
 import tempfile
 from datetime import UTC, datetime, timedelta
+from difflib import SequenceMatcher
 from os import getenv
 from pathlib import Path
 from typing import Any
@@ -12,6 +14,7 @@ from uuid import uuid4
 
 from .catalog import Catalog
 from .config import DEFAULT_DB_FILE, DEFAULT_TOOL_LIBRARY_DIR, LoadedConfig, load_config
+from .consensus_policy import decide as decide_consensus
 from .consent import ConsentGate
 from .contracts import (
     billing_route_intent,
@@ -66,14 +69,39 @@ def _bounded_text(value: str, limit: int) -> str:
     """Keep both the beginning and end of long operator input."""
     if len(value) <= limit:
         return value
-    head = max(1, int(limit * 0.72))
-    tail = max(1, limit - head)
-    omitted = len(value) - head - tail
-    return (
-        value[:head]
-        + f"\n\n[content compacted by LWA: {omitted} characters omitted]\n\n"
-        + value[-tail:]
+    marker = f"\n[content compacted by LWA: {len(value) - max(1, int(limit * 0.72)) - max(1, int(limit * 0.28))} characters omitted]\n"
+    available = max(2, limit - len(marker))
+    head = max(1, int(available * 0.72))
+    tail = max(1, available - head)
+    return (value[:head] + marker + value[-tail:])[:limit]
+
+
+def compact_prompt_material(value: str, limit: int = 32_000) -> str:
+    """Bound prompt material and remove repeated adjacent tool-output blocks."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("prompt material must be non-empty text")
+    value = re.sub(
+        r"(?ms)(TOOL OUTPUT:\n[^\n]*(?:\n|$))(?:\1)+",
+        r"\1[repeated tool output removed]\n",
+        value,
     )
+    lines = value.splitlines()
+    compacted: list[str] = []
+    previous: str | None = None
+    repeats = 0
+    for line in lines:
+        normalized = line.strip()
+        if normalized.startswith("TOOL OUTPUT:") and normalized == previous:
+            repeats += 1
+            continue
+        if repeats:
+            compacted.append(f"[repeated tool output removed: {repeats} lines]")
+            repeats = 0
+        compacted.append(line)
+        previous = normalized
+    if repeats:
+        compacted.append(f"[repeated tool output removed: {repeats} lines]")
+    return _bounded_text("\n".join(compacted), limit)
 
 
 def _parse_reset_at(value: Any) -> datetime | None:
@@ -110,6 +138,17 @@ def _compact_consensus_transcript(reviews: list[Any], failures: list[dict[str, A
             )
         )
     return _bounded_text("\n\n".join(sections), limit)
+
+
+def _reviews_agree(reviews: list[Any], threshold: float) -> bool:
+    """Recognize short/high-overlap voter agreement without another provider call."""
+    if len(reviews) < 2:
+        return False
+    left = " ".join(reviews[0].text.lower().split())
+    right = " ".join(reviews[1].text.lower().split())
+    if len(left) <= 120 and left == right:
+        return True
+    return SequenceMatcher(None, left, right).ratio() >= threshold
 
 
 def rank_model_tiers(models: list[Any], providers: dict[str, Any], limit: int = 100) -> list[dict[str, Any]]:
@@ -159,7 +198,8 @@ def rank_model_tiers(models: list[Any], providers: dict[str, Any], limit: int = 
 class RouterService:
     def __init__(self, config: LoadedConfig | None = None):
         self.session_id = uuid4().hex
-        self.consensus_default = True
+        self.consensus_override: bool | None = None
+        self.session_tokens_reserved = 0
         self.config = config or load_config()
         try:
             self._initialize_components(self.config)
@@ -267,6 +307,14 @@ class RouterService:
             merged_metadata["route_intent_billing_class"] = "free_only"
             merged_metadata.setdefault("consensus_preflight", False)
             merged_metadata.setdefault("consensus_role", "voter")
+        prompt = compact_prompt_material(prompt)
+        if merged_system:
+            merged_system = compact_prompt_material(merged_system)
+        effective_preferred = list(preferred_providers or [])
+        if not effective_preferred:
+            task_order = self.task_provider_order(task_kind)
+            if any(provider in self.config.settings.providers for provider in task_order):
+                effective_preferred = task_order
         if required_capabilities is None:
             required_capabilities = set(contract.required_capabilities)
         elif not contract.required_capabilities.issubset(required_capabilities):
@@ -283,7 +331,7 @@ class RouterService:
             allow_paid=allow_paid,
             allow_user_pays=allow_user_pays,
             max_output_tokens=max_output_tokens,
-            preferred_providers=preferred_providers or [],
+            preferred_providers=effective_preferred,
             excluded_providers=excluded_providers or [],
             required_capabilities=required_capabilities,
             metadata=merged_metadata,
@@ -347,21 +395,112 @@ class RouterService:
             ),
         }
 
+    def consensus_policy_for(self, request: RouteRequest) -> dict[str, object]:
+        return decide_consensus(
+            request.task,
+            request.prompt,
+            policy=self.config.settings.consensus_policy,
+            override=self.consensus_override,
+        ).as_dict()
+
+    def session_budget_for(self, request: RouteRequest, *, route_multiplier: int = 1) -> dict[str, object]:
+        """Return the preflight token decision for this live session."""
+        ceiling = self.config.settings.session_token_ceiling
+        estimate = max(1, (len(request.prompt) + len(request.system_prompt or "")) // 4)
+        estimate = (estimate + request.max_output_tokens) * max(1, route_multiplier)
+        if ceiling <= 0:
+            return {"status": "unlimited", "estimate": estimate, "mode": "normal"}
+        remaining = max(0, ceiling - self.session_tokens_reserved)
+        if estimate > remaining:
+            return {"status": "blocked", "estimate": estimate, "remaining": remaining, "fallback": "single_route"}
+        ratio = (self.session_tokens_reserved + estimate) / ceiling
+        warning = any(ratio >= threshold for threshold in self.config.settings.session_token_warning_thresholds)
+        return {
+            "status": "warning" if warning else "ok",
+            "estimate": estimate,
+            "remaining": remaining,
+            "mode": "economy" if warning else "normal",
+        }
+
+    def set_consensus_default(self, enabled: bool) -> bool:
+        """Set an explicit session override; adaptive mode remains config-driven."""
+        self.consensus_override = bool(enabled)
+        return self.consensus_override
+
+    def reserve_session_tokens(self, amount: int) -> dict[str, object]:
+        ceiling = self.config.settings.session_token_ceiling
+        if amount < 1:
+            raise ValueError("token reservation must be positive")
+        if ceiling <= 0:
+            self.session_tokens_reserved += amount
+            return {"status": "unlimited", "reserved": amount, "mode": "normal"}
+        projected = self.session_tokens_reserved + amount
+        if projected > ceiling:
+            return {"status": "blocked", "reserved": self.session_tokens_reserved, "fallback": "single_route"}
+        self.session_tokens_reserved = projected
+        ratio = projected / ceiling
+        warning = any(ratio >= threshold for threshold in self.config.settings.session_token_warning_thresholds)
+        return {
+            "status": "warning" if warning else "ok",
+            "reserved": projected,
+            "remaining": ceiling - projected,
+            "mode": "economy" if warning else "normal",
+        }
+
+    async def prepare_prompt(self, request: RouteRequest) -> dict[str, Any]:
+        """Apply consensus and session-budget policy consistently across MCP and CLI."""
+        policy = self.consensus_policy_for(request)
+        budget = self.session_budget_for(request, route_multiplier=3 if policy["enabled"] else 1)
+        if budget["status"] == "blocked":
+            remaining = int(budget.get("remaining", 0))
+            if remaining <= 0:
+                return {"status": "budget_exceeded", "session_budget": budget, "fallback": "single_route"}
+            request = request.model_copy(update={"max_output_tokens": max(1, min(request.max_output_tokens, self.config.settings.economy_output_tokens))})
+            policy = {**policy, "enabled": False, "source": "session_budget", "reason": "session ceiling forced single-route"}
+            budget = self.session_budget_for(request)
+        elif budget.get("mode") == "economy":
+            request = request.model_copy(update={"max_output_tokens": min(request.max_output_tokens, self.config.settings.economy_output_tokens)})
+        request = request.model_copy(
+            update={
+                "metadata": {
+                    **request.metadata,
+                    "consensus_default": bool(policy["enabled"]),
+                    "consensus_policy": policy,
+                }
+            }
+        )
+        result = await self.prepare_task(request)
+        result["session_budget"] = {**budget, "reservation": self.reserve_session_tokens(int(budget["estimate"]))}
+        return result
+
+    def task_provider_order(self, task: TaskKind) -> list[str]:
+        order = self.router.routing_policy().provider_order(session_id=self.session_id)
+        if self.config.settings.auxiliary_provider_mode != "third_party_first":
+            return order
+        auxiliary = {
+            TaskKind.QUICK_RESPONSE,
+            TaskKind.CONVERSATION_COMPRESSION,
+            TaskKind.TOKEN_OPTIMIZATION,
+            TaskKind.SITREP,
+        }
+        if task not in auxiliary:
+            return order
+        return [name for name in order if name != "codex"] + [name for name in order if name == "codex"]
+
     async def prepare_consensus(
         self,
         prompt: str,
-        voters: int = 3,
+        voters: int | None = None,
         quality: str = "balanced",
         allow_paid: bool = False,
         excluded_providers: list[str] | None = None,
         reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
-        """Preselect every eligible free model and a synthesis model.
+        """Preselect a bounded voter quorum and a synthesis model.
 
         Consensus is deliberately a free-model rite: paid and user-pays routes
-        are never voters. ``voters`` remains as a compatibility argument for
-        callers, but the contract is now all eligible free providers rather than
-        an arbitrary cap.
+        are never voters. Two voters are selected by default; callers may
+        explicitly request a larger quorum.
         """
         prompt = _bounded_text(prompt, CONSENSUS_DRAFT_MAX_CHARS)
         base = self._finalize_request(
@@ -373,13 +512,28 @@ class RouterService:
                 allow_paid=allow_paid,
                 allow_user_pays=False,
                 max_output_tokens=1000,
-                metadata={"consensus_preflight": True},
+                metadata={
+                    "consensus_preflight": True,
+                    "consensus_policy": {
+                        "enabled": True,
+                        "source": "explicit_tool",
+                        "reason": "explicit consensus request",
+                        "risk": "explicit",
+                        "override": True,
+                    },
+                },
             )
         )
         requests: list[RouteRequest] = []
         decisions: list[RouteDecision] = []
         excluded: list[str] = list(excluded_providers or [])
+        target_voters = min(
+            voters or self.config.settings.consensus_voters,
+            max(2, self.config.settings.max_parallel_consensus),
+        )
         while True:
+            if len(decisions) >= target_voters:
+                break
             req = base.model_copy(update={"excluded_providers": list(excluded)})
             try:
                 validate_request_contract(req)
@@ -680,6 +834,16 @@ class RouterService:
         if not reviews:
             detail = "; ".join(f"{item['provider']}: {item['error']}" for item in failures)
             raise RuntimeError(f"All consensus voters failed: {detail}")
+        if _reviews_agree(reviews, self.config.settings.consensus_agreement_threshold):
+            agreed = reviews[0]
+            return {
+                "status": "completed",
+                "reviews": [review.model_dump(mode="json") for review in reviews],
+                "voter_failures": failures,
+                "synthesis_failures": [],
+                "synthesis_skipped": True,
+                "synthesis": agreed.model_dump(mode="json"),
+            }
         if not prepared.synthesis_request or not prepared.synthesis_decision:
             raise RuntimeError("Prepared consensus plan is missing its locked synthesis route")
         synthesis_context = max(
@@ -752,7 +916,7 @@ class RouterService:
 
     async def smart_complete(self, request: RouteRequest) -> dict[str, Any]:
         """Legacy name retained for callers; strict mode returns preflight only."""
-        return await self.prepare_task(request)
+        return await self.prepare_prompt(request)
 
     def confirm_and_run(self, token: str) -> dict[str, Any]:
         """Legacy name retained; approval is separate from execution in strict mode."""
@@ -761,7 +925,7 @@ class RouterService:
     async def consensus(
         self,
         prompt: str,
-        voters: int = 3,
+        voters: int | None = None,
         quality: str = "balanced",
         allow_paid: bool = False,
         reasoning_effort: str | None = None,
@@ -899,7 +1063,7 @@ class RouterService:
                     "skip_pattern_detection": True,
                 },
             )
-            result = await self.prepare_task(request)
+            result = await self.prepare_prompt(request)
             result["library_tool"] = tool.model_dump(mode="json")
             return result
         if not tool.approved or not self.config.settings.allow_reviewed_script_execution:
@@ -1027,11 +1191,6 @@ class RouterService:
         self.router.set_consent_mode(parsed)
         return parsed.value
 
-    def set_consensus_default(self, enabled: bool) -> bool:
-        """Toggle consensus preparation for subsequent session prompts."""
-        self.consensus_default = bool(enabled)
-        return self.consensus_default
-
     def set_routing_mode(self, mode: str | RoutingMode) -> str:
         return self.router.set_routing_mode(mode).value
 
@@ -1047,6 +1206,10 @@ class RouterService:
         rows = {row["name"]: row for row in self.providers_json()}
         active = order[0] if order else None
         return {
+            "consensus": {
+                "policy": self.config.settings.consensus_policy,
+                "override": self.consensus_override,
+            },
             "mode": policy.mode.value,
             "manual_provider": policy.manual_provider,
             "sticky_provider": policy.sticky_for(self.session_id),
@@ -1080,6 +1243,12 @@ class RouterService:
             "health": [item.model_dump(mode="json") for item in self.catalog.health.values()],
             "pipelines": self.pipeline_manager.status(),
             "usage": summary,
+            "session_budget": {
+                "ceiling": self.config.settings.session_token_ceiling,
+                "reserved": self.session_tokens_reserved,
+                "remaining": max(0, self.config.settings.session_token_ceiling - self.session_tokens_reserved)
+                if self.config.settings.session_token_ceiling else None,
+            },
             "library": self.library.summary(),
             "pattern_count": len(summary.get("patterns", [])),
             "dashboard_host": dashboard_host,

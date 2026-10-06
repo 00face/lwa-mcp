@@ -38,13 +38,7 @@ def get_service() -> RouterService:
 
 
 async def _prepare_default_prompt(svc: RouterService, request):
-    """Apply the default all-prompts consensus doctrine before preflight."""
-    if not svc.consensus_default:
-        return await svc.prepare_task(request)
-    request = request.model_copy(
-        update={"metadata": {**request.metadata, "consensus_default": True}}
-    )
-    return await svc.prepare_task(request)
+    return await svc.prepare_prompt(request)
 
 
 @mcp.resource("lwa://status")
@@ -348,7 +342,7 @@ def set_consensus_mode(enabled: bool) -> str:
     """Toggle the session default: consensus on or single-route preparation."""
     svc = get_service()
     value = svc.set_consensus_default(enabled)
-    return _json({"consensus_default": value, "scope": "session"})
+    return _json({"consensus_default": value, "consensus_override": value, "scope": "session"})
 
 
 @mcp.tool()

@@ -9,7 +9,14 @@ dashboard_host: 127.0.0.1
 dashboard_port: 8766
 catalog_refresh_minutes: 30
 confirmation_ttl_seconds: 600
-max_parallel_consensus: 3
+max_parallel_consensus: 2
+consensus_policy: adaptive   # adaptive | always | off
+consensus_voters: 2
+consensus_agreement_threshold: 0.85
+session_token_ceiling: 50000 # 0 disables the per-session ceiling
+session_token_warning_thresholds: [0.5, 0.8, 1.0]
+economy_output_tokens: 700
+auxiliary_provider_mode: third_party_first
 
 # Persistent cross-project tool library and repetition detector.
 auto_detect_patterns: true
