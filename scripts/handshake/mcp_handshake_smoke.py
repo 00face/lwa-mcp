@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import shlex
 import subprocess
 import sys
 import time
@@ -12,15 +11,25 @@ import time
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", required=True)
-    parser.add_argument("--command", required=True)
+    parser.add_argument("--mode", choices=("mcp-server", "test-sleep"), default="mcp-server")
     parser.add_argument("--timeout", type=float, default=10.0)
     args = parser.parse_args()
     started = time.monotonic()
     try:
-        command = shlex.split(args.command)
-        if not command:
-            raise ValueError("empty command")
-        subprocess.run(command, shell=False, cwd=args.root, timeout=args.timeout, check=False)
+        if args.mode == "test-sleep":
+            subprocess.run(
+                [sys.executable, "-c", "import time; time.sleep(2)"],
+                cwd=args.root,
+                timeout=args.timeout,
+                check=False,
+            )
+        else:
+            subprocess.run(
+                [sys.executable, "-m", "lwa_mcp.server"],
+                cwd=args.root,
+                timeout=args.timeout,
+                check=False,
+            )
     except subprocess.TimeoutExpired:
         print(
             json.dumps(
@@ -34,7 +43,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    except (OSError, ValueError) as exc:
+    except OSError as exc:
         print(
             json.dumps(
                 {
